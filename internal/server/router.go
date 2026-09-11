@@ -1,14 +1,156 @@
 package server
 
 import (
-	"github.com/gin-gonic/gin"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"io"
+	"log"
 	"net/http"
+	"strconv"
+	"strings"
+	"unicode/utf8"
+
+	"github.com/gin-gonic/gin"
+	"github.com/go-sql-driver/mysql"
+	"musky/backend/internal/model"
 )
 
-func New() *gin.Engine {
-	router := gin.Default()
-	router.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "ok", "service": "musky-api"})
+type API struct {
+	db      *sql.DB
+	limiter *loginLimiter
+}
+
+func New(db *sql.DB) *gin.Engine {
+	a := &API{db: db, limiter: newLoginLimiter()}
+	r := gin.New()
+	r.Use(gin.Recovery())
+	_ = r.SetTrustedProxies(nil)
+	r.Use(func(c *gin.Context) {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64*1024)
+		c.Header("Cache-Control", "no-store")
+		c.Header("X-Content-Type-Options", "nosniff")
+		c.Next()
 	})
-	return router
+	r.GET("/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok", "service": "musky-api"}) })
+	v := r.Group("/api/v1")
+	v.POST("/auth/login", a.login)
+	v.Use(a.authenticate)
+	v.POST("/auth/logout", a.logout)
+	v.GET("/me", func(c *gin.Context) { c.JSON(200, actor(c)) })
+	v.PUT("/me/password", a.changePassword)
+	v.GET("/tenants", onlySuper, a.listTenants)
+	v.POST("/tenants", onlySuper, a.createTenant)
+	v.PATCH("/tenants/:tenantID", onlySuper, a.updateTenant)
+	t := v.Group("/tenants/:tenantID", a.tenantScope)
+	t.GET("/users", managers, a.listUsers)
+	t.POST("/users", managers, a.createUser)
+	t.GET("/users/:id", managers, a.getUser)
+	t.PATCH("/users/:id", managers, a.updateUser)
+	t.DELETE("/users/:id", managers, a.deactivateUser)
+	t.GET("/clients", a.listClients)
+	t.POST("/clients", a.createClient)
+	t.GET("/clients/:id", a.getClient)
+	t.PATCH("/clients/:id", a.updateClient)
+	t.DELETE("/clients/:id", managers, a.archiveClient)
+	return r
+}
+
+func fail(c *gin.Context, code int, message string) {
+	c.AbortWithStatusJSON(code, gin.H{"error": message})
+}
+func databaseError(c *gin.Context, err error) {
+	var me *mysql.MySQLError
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		fail(c, 404, "not found")
+	case errors.As(err, &me) && me.Number == 1062:
+		fail(c, 409, "record already exists")
+	case errors.As(err, &me) && (me.Number == 1452 || me.Number == 3819):
+		fail(c, 400, "invalid record association")
+	default:
+		log.Printf("database operation failed: %T", err)
+		fail(c, 500, "internal server error")
+	}
+}
+func decode(c *gin.Context, target any) bool {
+	if !strings.HasPrefix(strings.ToLower(c.GetHeader("Content-Type")), "application/json") {
+		fail(c, 415, "Content-Type must be application/json")
+		return false
+	}
+	d := json.NewDecoder(c.Request.Body)
+	d.DisallowUnknownFields()
+	if err := d.Decode(target); err != nil {
+		fail(c, 400, "invalid JSON body or unknown field")
+		return false
+	}
+	if err := d.Decode(new(any)); err != io.EOF {
+		fail(c, 400, "expected one JSON object")
+		return false
+	}
+	return true
+}
+func validText(s string, min, max int) bool {
+	n := utf8.RuneCountInString(s)
+	return n >= min && n <= max
+}
+func pathID(c *gin.Context, key string) (uint64, bool) {
+	id, err := strconv.ParseUint(c.Param(key), 10, 64)
+	if err != nil || id == 0 {
+		fail(c, 400, "invalid "+key)
+		return 0, false
+	}
+	return id, true
+}
+func pagination(c *gin.Context) (int, int, bool) {
+	limit, e1 := strconv.Atoi(c.DefaultQuery("limit", "50"))
+	offset, e2 := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	if e1 != nil || e2 != nil || limit < 1 || limit > 100 || offset < 0 {
+		fail(c, 400, "limit must be 1-100 and offset nonnegative")
+		return 0, 0, false
+	}
+	return limit, offset, true
+}
+func actor(c *gin.Context) model.User { return c.MustGet("user").(model.User) }
+func tenantID(c *gin.Context) uint64  { return c.MustGet("tenant_id").(uint64) }
+func onlySuper(c *gin.Context) {
+	if actor(c).Role != model.SuperAdmin {
+		fail(c, 403, "super_admin required")
+	}
+}
+func managers(c *gin.Context) {
+	if actor(c).Role == model.Trader {
+		fail(c, 403, "admin required")
+	}
+}
+func (a *API) tenantScope(c *gin.Context) {
+	id, ok := pathID(c, "tenantID")
+	if !ok {
+		return
+	}
+	u := actor(c)
+	if u.Role != model.SuperAdmin && (u.TenantID == nil || *u.TenantID != id) {
+		fail(c, 404, "not found")
+		return
+	}
+	var active bool
+	if err := a.db.QueryRowContext(c.Request.Context(), "SELECT active FROM tenants WHERE id = ?", id).Scan(&active); err != nil {
+		databaseError(c, err)
+		return
+	}
+	if !active {
+		fail(c, 403, "tenant is inactive")
+		return
+	}
+	c.Set("tenant_id", id)
+}
+
+type scanner interface{ Scan(...any) error }
+
+const userColumns = "id, tenant_id, name, email, role, active, password_hash, created_at"
+
+func scanUser(row scanner) (model.User, error) {
+	var u model.User
+	err := row.Scan(&u.ID, &u.TenantID, &u.Name, &u.Email, &u.Role, &u.Active, &u.PasswordHash, &u.CreatedAt)
+	return u, err
 }
