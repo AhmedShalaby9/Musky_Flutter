@@ -1,0 +1,891 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import '../core/api.dart';
+import '../core/money.dart';
+import '../core/theme.dart';
+
+class RecordPicker extends StatefulWidget {
+  const RecordPicker({
+    super.key,
+    required this.api,
+    required this.tenantId,
+    required this.products,
+    required this.onExpired,
+  });
+  final MuskyApi api;
+  final int tenantId;
+  final bool products;
+  final VoidCallback onExpired;
+  @override
+  State<RecordPicker> createState() => _RecordPickerState();
+}
+
+class _RecordPickerState extends State<RecordPicker> {
+  final _search = TextEditingController();
+  Timer? _timer;
+  List<Map<String, dynamic>> _rows = [];
+  bool _busy = true;
+  String? _error;
+  int _offset = 0, _ticket = 0;
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _search.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    final ticket = ++_ticket;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final query = Uri(
+        queryParameters: {
+          'q': _search.text,
+          'active': 'true',
+          'limit': '50',
+          'offset': '$_offset',
+        },
+      ).query;
+      final data = await widget.api.request(
+        'GET',
+        'tenants/${widget.tenantId}/${widget.products ? 'products' : 'clients'}?$query',
+      );
+      if (mounted && ticket == _ticket) {
+        setState(
+          () => _rows = (data['data'] as List).cast<Map<String, dynamic>>(),
+        );
+      }
+    } on ApiException catch (e) {
+      if (mounted && ticket == _ticket) {
+        if (e.status == 401) {
+          Navigator.pop(context);
+          widget.onExpired();
+        } else {
+          setState(() => _error = e.message);
+        }
+      }
+    } catch (_) {
+      if (mounted && ticket == _ticket) {
+        setState(() => _error = 'Unable to load records.');
+      }
+    } finally {
+      if (mounted && ticket == _ticket) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(widget.products ? 'Select product' : 'Select client'),
+    content: SizedBox(
+      width: 560,
+      height: 400,
+      child: Column(
+        children: [
+          TextField(
+            controller: _search,
+            autofocus: true,
+            decoration: InputDecoration(
+              labelText: widget.products
+                  ? 'Search title or code'
+                  : 'Search name or phone',
+              prefixIcon: const Icon(Icons.search),
+            ),
+            onChanged: (_) {
+              _timer?.cancel();
+              _timer = Timer(const Duration(milliseconds: 300), () {
+                _offset = 0;
+                _load();
+              });
+            },
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: _busy
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                ? Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      ErrorNotice(_error!),
+                      TextButton(onPressed: _load, child: const Text('Retry')),
+                    ],
+                  )
+                : _rows.isEmpty
+                ? const Center(child: Text('No matching active records.'))
+                : ListView.separated(
+                    itemCount: _rows.length,
+                    separatorBuilder: (_, index) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final row = _rows[index];
+                      return ListTile(
+                        title: Text(
+                          '${row[widget.products ? 'title' : 'name']}',
+                        ),
+                        subtitle: Text(
+                          widget.products
+                              ? '${row['code']} · ${row['quantity']} packs available · ${egp(row['unit_price_minor'] as int)} / pack'
+                              : '${row['phone'] ?? ''}',
+                        ),
+                        onTap: () => Navigator.pop(context, row),
+                      );
+                    },
+                  ),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Text('Page ${_offset ~/ 50 + 1}'),
+              IconButton(
+                tooltip: 'Previous results',
+                onPressed: _busy || _offset == 0
+                    ? null
+                    : () {
+                        _offset -= 50;
+                        _load();
+                      },
+                icon: const Icon(Icons.chevron_left),
+              ),
+              IconButton(
+                tooltip: 'More results',
+                onPressed: _busy || _rows.length < 50
+                    ? null
+                    : () {
+                        _offset += 50;
+                        _load();
+                      },
+                icon: const Icon(Icons.chevron_right),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Close'),
+      ),
+    ],
+  );
+}
+
+class _Line {
+  _Line(this.productId, this.title, this.pieces, int qty, int minor)
+    : quantity = TextEditingController(text: '$qty'),
+      price = TextEditingController(text: moneyInput(minor));
+  final int productId, pieces;
+  final String title;
+  final TextEditingController quantity, price;
+  int get total {
+    final qty = int.tryParse(quantity.text) ?? 0;
+    final minor = parseMoney(price.text) ?? 0;
+    if (qty < 0 ||
+        qty > 1000000000 ||
+        (minor > 0 && qty > 100000000000000 ~/ minor)) {
+      return 100000000000001;
+    }
+    return qty * minor;
+  }
+
+  void dispose() {
+    quantity.dispose();
+    price.dispose();
+  }
+}
+
+class InvoiceEditor extends StatefulWidget {
+  const InvoiceEditor({
+    super.key,
+    required this.api,
+    required this.tenantId,
+    required this.onExpired,
+    this.invoice,
+  });
+  final MuskyApi api;
+  final int tenantId;
+  final VoidCallback onExpired;
+  final Map<String, dynamic>? invoice;
+  @override
+  State<InvoiceEditor> createState() => _InvoiceEditorState();
+}
+
+class _InvoiceEditorState extends State<InvoiceEditor> {
+  final _form = GlobalKey<FormState>();
+  late final _date = TextEditingController(
+    text:
+        widget.invoice?['issue_date'] as String? ??
+        DateTime.now().toIso8601String().substring(0, 10),
+  );
+  late final _notes = TextEditingController(
+    text: widget.invoice?['notes'] as String? ?? '',
+  );
+  final List<_Line> _lines = [];
+  int? _clientId;
+  String? _clientName, _error;
+  bool _busy = false;
+  @override
+  void initState() {
+    super.initState();
+    final invoice = widget.invoice;
+    if (invoice != null) {
+      _clientId = invoice['client_id'] as int;
+      _clientName = invoice['client_name'] as String;
+      for (final item in invoice['items'] as List) {
+        _lines.add(
+          _Line(
+            item['product_id'] as int,
+            item['title'] as String,
+            item['pieces_per_unit'] as int,
+            item['quantity'] as int,
+            item['unit_price_minor'] as int,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _date.dispose();
+    _notes.dispose();
+    for (final line in _lines) {
+      line.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _pick(bool product) async {
+    final row = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => RecordPicker(
+        api: widget.api,
+        tenantId: widget.tenantId,
+        products: product,
+        onExpired: () {
+          if (mounted) {
+            Navigator.pop(context);
+          }
+          widget.onExpired();
+        },
+      ),
+    );
+    if (row == null || !mounted) {
+      return;
+    }
+    setState(() {
+      if (!product) {
+        _clientId = row['id'] as int;
+        _clientName = row['name'] as String;
+      } else {
+        final matches = _lines.where((l) => l.productId == row['id']);
+        if (matches.isNotEmpty) {
+          final line = matches.first;
+          line.quantity.text = '${(int.tryParse(line.quantity.text) ?? 0) + 1}';
+        } else if (_lines.length < 100) {
+          _lines.add(
+            _Line(
+              row['id'] as int,
+              row['title'] as String,
+              row['pieces_per_unit'] as int,
+              1,
+              row['unit_price_minor'] as int,
+            ),
+          );
+        } else {
+          _error = 'An invoice can contain up to 100 products.';
+        }
+      }
+    });
+  }
+
+  Future<void> _save() async {
+    if (_busy || !_form.currentState!.validate()) {
+      return;
+    }
+    if (_clientId == null || _lines.isEmpty) {
+      setState(() => _error = 'Select a client and add at least one product.');
+      return;
+    }
+    final total = _lines.fold<int>(0, (sum, line) => sum + line.total);
+    if (total > 100000000000000) {
+      setState(() => _error = 'Invoice total exceeds the supported limit.');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final id = widget.invoice?['id'];
+      final result = await widget.api.request(
+        id == null ? 'POST' : 'PUT',
+        'tenants/${widget.tenantId}/invoices${id == null ? '' : '/$id'}',
+        {
+          'client_id': _clientId,
+          'issue_date': _date.text,
+          'notes': _notes.text.trim(),
+          if (id != null) 'version': widget.invoice!['version'],
+          'items': [
+            for (final line in _lines)
+              {
+                'product_id': line.productId,
+                'quantity': int.parse(line.quantity.text),
+                'unit_price_minor': parseMoney(line.price.text)!,
+              },
+          ],
+        },
+      );
+      if (mounted) {
+        Navigator.pop(context, result);
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        if (e.status == 401) {
+          Navigator.pop(context);
+          widget.onExpired();
+        } else {
+          setState(() => _error = e.message);
+        }
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Unable to save the draft. Try again.');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => PopScope(
+    canPop: !_busy,
+    child: AlertDialog(
+      title: Text(widget.invoice == null ? 'New invoice' : 'Edit draft'),
+      content: SizedBox(
+        width: 920,
+        height: MediaQuery.sizeOf(context).height * .65,
+        child: SingleChildScrollView(
+          child: Form(
+            key: _form,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Quantities are whole packs. Prices are EGP per pack. A draft does not change stock.',
+                  style: TextStyle(color: muted),
+                ),
+                const SizedBox(height: 20),
+                if (_error != null) ...[
+                  ErrorNotice(_error!),
+                  const SizedBox(height: 16),
+                ],
+                Wrap(
+                  spacing: 16,
+                  runSpacing: 16,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: _busy ? null : () => _pick(false),
+                      icon: const Icon(Icons.person_outline),
+                      label: Text(_clientName ?? 'Select client'),
+                    ),
+                    SizedBox(
+                      width: 210,
+                      child: TextFormField(
+                        controller: _date,
+                        enabled: !_busy,
+                        decoration: const InputDecoration(
+                          labelText: 'Issue date (YYYY-MM-DD)',
+                        ),
+                        validator: (value) {
+                          final date = DateTime.tryParse(value ?? '');
+                          return date == null ||
+                                  !RegExp(
+                                    r'^\d{4}-\d{2}-\d{2}$',
+                                  ).hasMatch(value!) ||
+                                  date.toIso8601String().substring(0, 10) !=
+                                      value ||
+                                  date.year < 1000
+                              ? 'Enter a valid date.'
+                              : null;
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                for (final line in _lines)
+                  Padding(
+                    key: ValueKey(line),
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: paper,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  '${line.title} · ${line.pieces} pieces/pack',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: 'Remove ${line.title}',
+                                onPressed: _busy
+                                    ? null
+                                    : () {
+                                        setState(() => _lines.remove(line));
+                                        WidgetsBinding.instance
+                                            .addPostFrameCallback(
+                                              (_) => line.dispose(),
+                                            );
+                                      },
+                                icon: const Icon(Icons.close, size: 18),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 16,
+                            runSpacing: 12,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: 145,
+                                child: TextFormField(
+                                  controller: line.quantity,
+                                  enabled: !_busy,
+                                  keyboardType: TextInputType.number,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Quantity (packs)',
+                                  ),
+                                  onChanged: (_) => setState(() {}),
+                                  validator: (v) {
+                                    final qty = int.tryParse(v ?? '');
+                                    return qty == null ||
+                                            qty < 1 ||
+                                            qty > 1000000000
+                                        ? 'Use 1–1,000,000,000.'
+                                        : null;
+                                  },
+                                ),
+                              ),
+                              SizedBox(
+                                width: 180,
+                                child: TextFormField(
+                                  controller: line.price,
+                                  enabled: !_busy,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                  decoration: const InputDecoration(
+                                    labelText: 'Price / pack (EGP)',
+                                  ),
+                                  onChanged: (_) => setState(() {}),
+                                  validator: (v) => parseMoney(v ?? '') == null
+                                      ? 'Use up to 2 decimals.'
+                                      : null,
+                                ),
+                              ),
+                              Text(
+                                egp(line.total),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                OutlinedButton.icon(
+                  onPressed: _busy ? null : () => _pick(true),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add product line'),
+                ),
+                const SizedBox(height: 22),
+                TextFormField(
+                  controller: _notes,
+                  enabled: !_busy,
+                  maxLines: 2,
+                  maxLength: 2000,
+                  decoration: const InputDecoration(
+                    labelText: 'Notes',
+                    counterText: '',
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    'Total: ${egp(_lines.fold<int>(0, (sum, line) => sum + line.total))}',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _busy ? null : () => Navigator.pop(context),
+          child: const Text('Close'),
+        ),
+        FilledButton(
+          onPressed: _busy ? null : _save,
+          child: Text(_busy ? 'Saving…' : 'Save draft'),
+        ),
+      ],
+    ),
+  );
+}
+
+class InvoiceDetails extends StatefulWidget {
+  const InvoiceDetails({
+    super.key,
+    required this.api,
+    required this.tenantId,
+    required this.invoiceId,
+    required this.onExpired,
+  });
+  final MuskyApi api;
+  final int tenantId, invoiceId;
+  final VoidCallback onExpired;
+  @override
+  State<InvoiceDetails> createState() => _InvoiceDetailsState();
+}
+
+class _InvoiceDetailsState extends State<InvoiceDetails> {
+  Map<String, dynamic>? _invoice;
+  bool _busy = true;
+  String? _error;
+  String get _path => 'tenants/${widget.tenantId}/invoices/${widget.invoiceId}';
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  void _handle(Object error) {
+    if (!mounted) {
+      return;
+    }
+    if (error is ApiException && error.status == 401) {
+      Navigator.pop(context);
+      widget.onExpired();
+    } else {
+      setState(
+        () => _error = error is ApiException
+            ? error.message
+            : 'Unable to complete the request. Please refresh.',
+      );
+    }
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final data = await widget.api.request('GET', _path);
+      if (mounted) {
+        setState(() => _invoice = data);
+      }
+    } catch (e) {
+      _handle(e);
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  Future<void> _transition(String action) async {
+    String? reason;
+    if (action == 'void') {
+      reason = await showDialog<String>(
+        context: context,
+        builder: (_) => const VoidReasonDialog(),
+      );
+      if (reason == null || !mounted) {
+        return;
+      }
+    } else {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(
+            action == 'post' ? 'Post this invoice?' : 'Cancel this draft?',
+          ),
+          content: Text(
+            action == 'post'
+                ? 'This deducts the listed packs from stock and records ${egp(_invoice!['total_minor'] as int)} owed by ${_invoice!['client_name']}. Posted invoices cannot be edited.'
+                : 'This keeps the draft as cancelled. Stock and balances will not change.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Go back'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text(
+                action == 'post' ? 'Confirm posting' : 'Confirm cancellation',
+              ),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) {
+        return;
+      }
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final data = await widget.api.request(
+        action == 'cancel' ? 'DELETE' : 'POST',
+        action == 'cancel'
+            ? '$_path?version=${_invoice!['version']}'
+            : '$_path/$action',
+        action == 'cancel'
+            ? null
+            : {'version': _invoice!['version'], 'reason': ?reason},
+      );
+      if (mounted) {
+        setState(() => _invoice = data);
+      }
+    } catch (e) {
+      _handle(e);
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  Future<void> _edit() async {
+    final data = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => InvoiceEditor(
+        api: widget.api,
+        tenantId: widget.tenantId,
+        invoice: _invoice,
+        onExpired: () {
+          if (mounted) {
+            Navigator.pop(context);
+          }
+          widget.onExpired();
+        },
+      ),
+    );
+    if (data != null && mounted) {
+      setState(() => _invoice = data);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => PopScope(
+    canPop: !_busy,
+    child: AlertDialog(
+      title: Row(
+        children: [
+          Expanded(
+            child: Text(_invoice == null ? 'Invoice' : invoiceLabel(_invoice!)),
+          ),
+          IconButton(
+            tooltip: 'Refresh invoice',
+            onPressed: _busy ? null : _load,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: 850,
+        height: MediaQuery.sizeOf(context).height * .62,
+        child: _busy
+            ? const Center(child: CircularProgressIndicator())
+            : SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (_error != null) ...[
+                      ErrorNotice(_error!),
+                      const SizedBox(height: 16),
+                    ],
+                    if (_invoice != null) ...[
+                      Text(
+                        '${_invoice!['client_name']}',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      if ('${_invoice!['client_address']}'.isNotEmpty)
+                        Text('${_invoice!['client_address']}'),
+                      const SizedBox(height: 10),
+                      Text(
+                        '${_invoice!['issue_date']} · ${_invoice!['status']} · EGP',
+                        style: const TextStyle(color: muted),
+                      ),
+                      const SizedBox(height: 20),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: DataTable(
+                          columns: const [
+                            DataColumn(label: Text('Product')),
+                            DataColumn(label: Text('Packs')),
+                            DataColumn(label: Text('Pieces/pack')),
+                            DataColumn(label: Text('Price/pack')),
+                            DataColumn(label: Text('Total')),
+                          ],
+                          rows: [
+                            for (final item in _invoice!['items'] as List)
+                              DataRow(
+                                cells: [
+                                  DataCell(Text('${item['title']}')),
+                                  DataCell(Text('${item['quantity']}')),
+                                  DataCell(Text('${item['pieces_per_unit']}')),
+                                  DataCell(
+                                    Text(egp(item['unit_price_minor'] as int)),
+                                  ),
+                                  DataCell(
+                                    Text(egp(item['total_minor'] as int)),
+                                  ),
+                                ],
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          'Total: ${egp(_invoice!['total_minor'] as int)}',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                      ),
+                      if ('${_invoice!['notes']}'.isNotEmpty) ...[
+                        const SizedBox(height: 20),
+                        Text('Notes: ${_invoice!['notes']}'),
+                      ],
+                      if (_invoice!['status'] == 'void') ...[
+                        const SizedBox(height: 20),
+                        Text('Void reason: ${_invoice!['void_reason']}'),
+                      ],
+                    ],
+                  ],
+                ),
+              ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _busy ? null : () => Navigator.pop(context),
+          child: const Text('Close'),
+        ),
+        if (_invoice?['status'] == 'draft') ...[
+          TextButton(
+            onPressed: _busy ? null : () => _transition('cancel'),
+            child: const Text('Cancel draft'),
+          ),
+          OutlinedButton(
+            onPressed: _busy ? null : _edit,
+            child: const Text('Edit draft'),
+          ),
+          FilledButton(
+            onPressed: _busy ? null : () => _transition('post'),
+            child: const Text('Post invoice'),
+          ),
+        ],
+        if (_invoice?['status'] == 'posted')
+          OutlinedButton(
+            onPressed: _busy ? null : () => _transition('void'),
+            child: const Text('Void invoice'),
+          ),
+      ],
+    ),
+  );
+}
+
+class VoidReasonDialog extends StatefulWidget {
+  const VoidReasonDialog({super.key});
+  @override
+  State<VoidReasonDialog> createState() => _VoidReasonDialogState();
+}
+
+class _VoidReasonDialogState extends State<VoidReasonDialog> {
+  final _form = GlobalKey<FormState>();
+  final _reason = TextEditingController();
+  @override
+  void dispose() {
+    _reason.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Void invoice'),
+    content: SizedBox(
+      width: 420,
+      child: Form(
+        key: _form,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Voiding restores the invoiced packs and reverses the client debt. This cannot be undone.',
+            ),
+            const SizedBox(height: 20),
+            TextFormField(
+              controller: _reason,
+              autofocus: true,
+              maxLength: 500,
+              maxLines: 3,
+              decoration: const InputDecoration(labelText: 'Reason'),
+              validator: (v) =>
+                  v == null || v.trim().isEmpty ? 'Enter a reason.' : null,
+            ),
+          ],
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Go back'),
+      ),
+      FilledButton(
+        onPressed: () {
+          if (_form.currentState!.validate()) {
+            Navigator.pop(context, _reason.text.trim());
+          }
+        },
+        child: const Text('Confirm void'),
+      ),
+    ],
+  );
+}
