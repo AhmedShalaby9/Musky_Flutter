@@ -20,23 +20,23 @@ func (in *createUserInput) validate() bool {
 }
 func (a *API) createTenant(c *gin.Context) {
 	var in struct {
-		Name  string          `json:"name"`
-		Admin createUserInput `json:"admin"`
+		Name   string          `json:"name"`
+		Trader createUserInput `json:"trader"`
 	}
 	if !decode(c, &in) {
 		return
 	}
 	in.Name = strings.TrimSpace(in.Name)
-	if in.Admin.Role != "" && in.Admin.Role != model.Admin {
-		fail(c, 400, "initial user must be an admin")
+	if in.Trader.Role != "" && in.Trader.Role != model.Trader {
+		fail(c, 400, "initial user must be a trader")
 		return
 	}
-	in.Admin.Role = model.Admin
-	if !validText(in.Name, 1, 150) || !in.Admin.validate() {
-		fail(c, 400, "valid tenant name, admin name, email and 12-72 byte password required")
+	in.Trader.Role = model.Trader
+	if !validText(in.Name, 1, 150) || !in.Trader.validate() {
+		fail(c, 400, "valid tenant name, trader name, email and 12-72 byte password required")
 		return
 	}
-	hash, err := HashPassword(in.Admin.Password)
+	hash, err := HashPassword(in.Trader.Password)
 	if err != nil {
 		fail(c, 500, "internal server error")
 		return
@@ -57,7 +57,7 @@ func (a *API) createTenant(c *gin.Context) {
 		databaseError(c, err)
 		return
 	}
-	res, err = tx.ExecContext(c.Request.Context(), "INSERT INTO users(tenant_id,name,email,password_hash,role) VALUES (?,?,?,?,'admin')", id, in.Admin.Name, in.Admin.Email, hash)
+	res, err = tx.ExecContext(c.Request.Context(), "INSERT INTO users(tenant_id,name,email,password_hash,role) VALUES (?,?,?,?,'trader')", id, in.Trader.Name, in.Trader.Email, hash)
 	if err != nil {
 		databaseError(c, err)
 		return
@@ -71,7 +71,7 @@ func (a *API) createTenant(c *gin.Context) {
 		databaseError(c, err)
 		return
 	}
-	c.JSON(201, gin.H{"id": id, "name": in.Name, "active": true, "admin_id": userID})
+	c.JSON(201, gin.H{"id": id, "name": in.Name, "active": true, "trader_id": userID})
 }
 func (a *API) listTenants(c *gin.Context) {
 	limit, offset, ok := pagination(c)

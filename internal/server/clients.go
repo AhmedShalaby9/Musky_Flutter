@@ -76,7 +76,18 @@ func (a *API) listClients(c *gin.Context) {
 	if !ok {
 		return
 	}
-	rows, err := a.db.QueryContext(c.Request.Context(), "SELECT "+clientColumns+" FROM clients WHERE tenant_id=? ORDER BY id LIMIT ? OFFSET ?", tenantID(c), limit, offset)
+	query := "SELECT " + clientColumns + " FROM clients WHERE tenant_id=?"
+	args := []any{tenantID(c)}
+	if c.Query("active") == "true" {
+		query += " AND active=TRUE"
+	}
+	if q := strings.TrimSpace(c.Query("q")); q != "" {
+		query += " AND (name LIKE ? OR phone LIKE ?)"
+		args = append(args, "%"+q+"%", "%"+q+"%")
+	}
+	query += " ORDER BY id LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
+	rows, err := a.db.QueryContext(c.Request.Context(), query, args...)
 	if err != nil {
 		databaseError(c, err)
 		return
@@ -129,14 +140,6 @@ func (a *API) saveClient(c *gin.Context, create, archive bool) {
 		return
 	}
 	u := actor(c)
-	if u.Role == model.Trader && in.Active != nil {
-		fail(c, 403, "admin required to archive or restore clients")
-		return
-	}
-	if u.Role == model.Trader && in.UserID != nil && (!create || *in.UserID != u.ID) {
-		fail(c, 403, "admin required to assign clients")
-		return
-	}
 	v := model.Client{TenantID: tenantID(c), Active: true}
 	var id uint64
 	if !create {

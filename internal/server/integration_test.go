@@ -83,12 +83,12 @@ func TestMySQLTenantIsolation(t *testing.T) {
 	call("POST", "/api/v1/auth/login", "", `{"email":"root@musky.test","password":"wrong"}`, 401)
 	root := login("root@musky.test")
 	call("GET", "/api/v1/me", root, "", 200)
-	tenant1 := call("POST", "/api/v1/tenants", root, fmt.Sprintf(`{"name":"Business A","admin":{"name":"Admin A","email":"a@musky.test","password":%q}}`, password), 201)
-	tenant2 := call("POST", "/api/v1/tenants", root, fmt.Sprintf(`{"name":"Business B","admin":{"name":"Admin B","email":"b@musky.test","password":%q}}`, password), 201)
+	tenant1 := call("POST", "/api/v1/tenants", root, fmt.Sprintf(`{"name":"Business A","trader":{"name":"Trader A","email":"a@musky.test","password":%q}}`, password), 201)
+	tenant2 := call("POST", "/api/v1/tenants", root, fmt.Sprintf(`{"name":"Business B","trader":{"name":"Trader B","email":"b@musky.test","password":%q}}`, password), 201)
 	tid1 := uint64(tenant1["id"].(float64))
 	tid2 := uint64(tenant2["id"].(float64))
-	admin1 := uint64(tenant1["admin_id"].(float64))
-	admin2 := uint64(tenant2["admin_id"].(float64))
+	owner1 := uint64(tenant1["trader_id"].(float64))
+	owner2 := uint64(tenant2["trader_id"].(float64))
 	p1 := fmt.Sprintf("/api/v1/tenants/%d", tid1)
 	p2 := fmt.Sprintf("/api/v1/tenants/%d", tid2)
 	a := login("a@musky.test")
@@ -96,21 +96,21 @@ func TestMySQLTenantIsolation(t *testing.T) {
 	call("POST", "/api/v1/tenants", a, `{}`, 403)
 	call("GET", p2+"/users", a, "", 404)
 	call("POST", p1+"/users", a, fmt.Sprintf(`{"name":"Evil","email":"evil@musky.test","role":"super_admin","password":%q}`, password), 400)
-	call("POST", p1+"/users", a, fmt.Sprintf(`{"name":"Admin","email":"extra@musky.test","role":"admin","password":%q}`, password), 403)
-	trader := call("POST", p1+"/users", a, fmt.Sprintf(`{"name":"Trader","email":"trader@musky.test","role":"trader","password":%q}`, password), 201)
-	traderID := uint64(trader["id"].(float64))
-	traderPath := fmt.Sprintf("%s/users/%d", p1, traderID)
-	tr := login("trader@musky.test")
-	call("GET", p1+"/users", tr, "", 403)
+	call("POST", p1+"/users", a, fmt.Sprintf(`{"name":"Second trader","email":"extra@musky.test","role":"trader","password":%q}`, password), 400)
+	trader := call("POST", p1+"/users", a, fmt.Sprintf(`{"name":"Staff Admin","email":"staff@musky.test","role":"admin","password":%q}`, password), 201)
+	staffID := uint64(trader["id"].(float64))
+	staffPath := fmt.Sprintf("%s/users/%d", p1, staffID)
+	tr := login("staff@musky.test")
+	call("GET", p1+"/users", tr, "", 200)
 	call("POST", p1+"/users", tr, `{}`, 403)
-	call("PATCH", traderPath, a, `{"role":"admin"}`, 403)
-	call("POST", p1+"/clients", tr, fmt.Sprintf(`{"name":"Invalid owner","user_id":%d}`, admin2), 403)
-	call("POST", p1+"/clients", a, fmt.Sprintf(`{"name":"Invalid owner","user_id":%d}`, admin2), 404)
+	call("PATCH", staffPath, a, `{"role":"trader"}`, 409)
+	call("POST", p1+"/clients", tr, fmt.Sprintf(`{"name":"Invalid owner","user_id":%d}`, owner2), 404)
+	call("POST", p1+"/clients", a, fmt.Sprintf(`{"name":"Invalid owner","user_id":%d}`, owner2), 404)
 	call("POST", p1+"/clients", tr, fmt.Sprintf(`{"name":"Injected tenant","tenant_id":%d}`, tid2), 400)
 	client := call("POST", p1+"/clients", tr, `{"name":"Client One","phone":"01000000000"}`, 201)
 	clientID := uint64(client["id"].(float64))
 	clientPath := fmt.Sprintf("%s/clients/%d", p1, clientID)
-	if uint64(client["user_id"].(float64)) != traderID {
+	if uint64(client["user_id"].(float64)) != staffID {
 		t.Fatal("client not associated with creator")
 	}
 	call("GET", clientPath, b, "", 404)
@@ -122,8 +122,8 @@ func TestMySQLTenantIsolation(t *testing.T) {
 		t.Fatal("cross-tenant list leak")
 	}
 	call("PATCH", clientPath, tr, `{"notes":"updated"}`, 200)
-	call("PATCH", clientPath, tr, `{"active":false}`, 403)
-	call("DELETE", clientPath, tr, "", 403)
+	call("PATCH", clientPath, tr, `{"active":false}`, 200)
+	call("DELETE", clientPath, tr, "", 204)
 	call("DELETE", clientPath, a, "", 204)
 	archived := call("GET", clientPath, a, "", 200)
 	if archived["active"] != false {
@@ -132,19 +132,23 @@ func TestMySQLTenantIsolation(t *testing.T) {
 	call("PATCH", clientPath, a, `{"active":true}`, 200)
 	call("GET", p1+"/clients?limit=0", a, "", 400)
 	call("GET", p1+"/users/abc", a, "", 400)
-	call("GET", fmt.Sprintf("%s/users/%d", p1, admin2), a, "", 404)
-	call("DELETE", fmt.Sprintf("%s/users/%d", p1, admin1), root, "", 409)
-	call("PATCH", fmt.Sprintf("%s/users/%d", p1, admin1), root, `{"role":"trader"}`, 409)
-	// Tenant + first admin must roll back together when email conflicts.
-	call("POST", "/api/v1/tenants", root, fmt.Sprintf(`{"name":"Rolled back","admin":{"name":"Duplicate","email":"a@musky.test","password":%q}}`, password), 409)
+	call("GET", fmt.Sprintf("%s/users/%d", p1, owner2), a, "", 404)
+	call("DELETE", fmt.Sprintf("%s/users/%d", p1, owner1), root, "", 409)
+	call("PATCH", fmt.Sprintf("%s/users/%d", p1, owner1), root, `{"role":"admin"}`, 409)
+	// Tenant + trader owner must roll back together when email conflicts.
+	call("POST", "/api/v1/tenants", root, fmt.Sprintf(`{"name":"Rolled back","trader":{"name":"Duplicate","email":"a@musky.test","password":%q}}`, password), 409)
 	if err = db.QueryRow("SELECT COUNT(*) FROM tenants").Scan(&count); err != nil || count != 2 {
 		t.Fatal("tenant creation did not roll back", err, count)
 	}
 	// Database constraints enforce tenant association even if an API check is bypassed.
-	_, err = db.Exec("INSERT INTO clients(tenant_id,user_id,name) VALUES (?,?,?)", tid1, admin2, "Invalid")
+	_, err = db.Exec("INSERT INTO clients(tenant_id,user_id,name) VALUES (?,?,?)", tid1, owner2, "Invalid")
 	var constraint *mysql.MySQLError
 	if !errors.As(err, &constraint) || constraint.Number != 1452 {
 		t.Fatal("expected cross-tenant foreign-key rejection", err)
+	}
+	_, err = db.Exec("INSERT INTO users(tenant_id,name,email,password_hash,role) VALUES (?,?,?,?,?)", tid1, "Second trader", "second@musky.test", "hash", "trader")
+	if !errors.As(err, &constraint) || constraint.Number != 1062 {
+		t.Fatal("database must reject two traders in the same tenant", err)
 	}
 	_, err = db.Exec("INSERT INTO users(tenant_id,name,email,password_hash,role) VALUES (?,?,?,?,?)", tid1, "Invalid", "bad@musky.test", "hash", "super_admin")
 	if err == nil {
@@ -152,18 +156,18 @@ func TestMySQLTenantIsolation(t *testing.T) {
 	}
 	// Raw bearer tokens are never persisted.
 	var stored string
-	if err = db.QueryRow("SELECT token_hash FROM sessions WHERE user_id=?", traderID).Scan(&stored); err != nil || stored == tr {
+	if err = db.QueryRow("SELECT token_hash FROM sessions WHERE user_id=?", staffID).Scan(&stored); err != nil || stored == tr {
 		t.Fatal("unsafe token storage", err)
 	}
-	call("DELETE", traderPath, a, "", 204)
+	call("DELETE", staffPath, a, "", 204)
 	call("GET", "/api/v1/me", tr, "", 401)
-	call("POST", "/api/v1/auth/login", "", fmt.Sprintf(`{"email":"trader@musky.test","password":%q}`, password), 401)
-	call("PATCH", traderPath, a, `{"active":true}`, 200)
-	tr = login("trader@musky.test")
+	call("POST", "/api/v1/auth/login", "", fmt.Sprintf(`{"email":"staff@musky.test","password":%q}`, password), 401)
+	call("PATCH", staffPath, a, `{"active":true}`, 200)
+	tr = login("staff@musky.test")
 	call("PUT", "/api/v1/me/password", tr, fmt.Sprintf(`{"current_password":%q,"new_password":"new-password-12345"}`, password), 204)
 	call("GET", "/api/v1/me", tr, "", 401)
-	call("POST", "/api/v1/auth/login", "", fmt.Sprintf(`{"email":"trader@musky.test","password":%q}`, password), 401)
-	newLogin := call("POST", "/api/v1/auth/login", "", `{"email":"trader@musky.test","password":"new-password-12345"}`, 200)
+	call("POST", "/api/v1/auth/login", "", fmt.Sprintf(`{"email":"staff@musky.test","password":%q}`, password), 401)
+	newLogin := call("POST", "/api/v1/auth/login", "", `{"email":"staff@musky.test","password":"new-password-12345"}`, 200)
 	tr = newLogin["access_token"].(string)
 	call("POST", "/api/v1/auth/logout", tr, "", 204)
 	call("GET", "/api/v1/me", tr, "", 401)
@@ -177,5 +181,5 @@ func TestMySQLTenantIsolation(t *testing.T) {
 	}
 	call("GET", "/api/v1/me", b, "", 401)
 	// A request with unsupported JSON fields must not silently assign roles/tenants.
-	call("PATCH", traderPath, a, `{"tenant_id":999}`, 400)
+	call("PATCH", staffPath, a, `{"tenant_id":999}`, 400)
 }

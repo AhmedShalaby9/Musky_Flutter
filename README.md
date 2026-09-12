@@ -1,6 +1,6 @@
-# Musky Backend
+﻿# Musky Backend
 
-MySQL-backed Go Gin API for the Musky desktop application. This first increment implements tenants, login users, and non-login clients. Products, invoices, payments, balances, and Flutter integration are the next increment; their proposed design is in [docs/design.md](docs/design.md).
+MySQL-backed Go Gin API for the Musky desktop application. Implements tenant-owned users/clients, products measured in packs, EGP sales invoices, stock movements, and invoice-ledger totals. The Flutter desktop app connects to these APIs. Payments and opening balances remain the next increment; see [commerce API](docs/commerce-api.md).
 
 ## Requirements
 
@@ -38,11 +38,11 @@ The server defaults to `127.0.0.1:8080`; override `MUSKY_ADDR` if needed. Use HT
 
 See [docs/api.md](docs/api.md) for request examples and all endpoints.
 
-- `super_admin`: the sole platform account; creates businesses and their admins and can manage tenant data explicitly by tenant ID.
-- `admin`: manages traders and clients within its own tenant. Admin-account creation and changes belong to the super admin.
-- `trader`: reads and edits tenant clients; cannot manage users, change client ownership, or archive clients.
+- `super_admin`: the sole platform account; creates a separate tenant and owner account for each trader and can manage tenant data explicitly by tenant ID.
+- `admin`: supports one trader by managing clients within that trader's tenant; cannot manage login accounts.
+- `trader`: owns a dedicated tenant, manages its clients, and can add/manage supporting admin accounts. A second trader always requires a new tenant.
 - Clients have no password, role, or login endpoint. `clients.user_id` links to an active user in the same tenant on creation/reassignment. Client visibility is shared within the business.
-- Email is globally unique for unambiguous login. A user belongs to one business in this first version.
+- Email is globally unique for unambiguous login. Each trader has their own tenant. Supporting admins belong to that trader's tenant.
 
 Bearer sessions last 24 hours. Only SHA-256 token hashes are stored. Passwords use bcrypt and are never returned. Logout, password changes, role/email changes and account deactivation revoke sessions; disabled tenants also block authentication. Login is limited to 20 attempts per IP per 15 minutes per API process. Trusted proxies are disabled by default; configure deliberate proxy trust and a shared limiter when deploying multiple API instances. Expired session rows for a user are cleaned on login; deployments can additionally schedule deletion by `expires_at`.
 
@@ -61,6 +61,14 @@ $env:MYSQL_TEST_DSN = 'musky_test:YOUR_TEST_PASSWORD@tcp(127.0.0.1:3306)/musky_t
 ..\.tools\go\bin\go.exe test ./... -count=1
 ```
 
-The integration suite refuses a database containing users and leaves test data for inspection. Use a new test database for each run. It tests duplicate super admins, cross-tenant reads/writes/foreign keys, role escalation, last-admin protection, atomic tenant creation, passwords, logout, account deactivation and expiry.
+The integration suite refuses a database containing users and leaves test data for inspection. Use a new test database for each run. It tests duplicate super admins, cross-tenant reads/writes/foreign keys, role escalation, trader-owner protection, atomic tenant/trader creation, passwords, logout, account deactivation and expiry.
 
 Implementation references: [MySQL Go driver](https://github.com/go-sql-driver/mysql), [MySQL table constraints](https://dev.mysql.com/doc/refman/8.0/en/create-table.html), [bcrypt](https://pkg.go.dev/golang.org/x/crypto/bcrypt).
+
+## Upgrading the initial shared-business schema
+
+Migration 002 enforces at most one trader per tenant with a MySQL unique generated column, including inactive trader accounts. New tenants and their trader owners are created atomically. Existing tenants must each have exactly one trader before upgrading; otherwise migration stops without reassigning any business data. Explicitly assign missing owners or split shared tenants and their clients before retrying. Role changes between traders and admins are blocked. Suspend a trader through the tenant's `active` flag rather than deleting or demoting its owner.
+
+## Product and invoice tests
+
+Set MYSQL_COMMERCE_TEST_DSN to a fresh dedicated MySQL database to exercise invoice posting, voids, stock concurrency, exact pack pricing, and tenant isolation. Migration 003 creates commerce tables without changing existing users or clients.

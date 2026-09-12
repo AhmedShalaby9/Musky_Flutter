@@ -53,8 +53,8 @@ func (a *API) createUser(c *gin.Context) {
 		fail(c, 400, "valid name, email, admin/trader role and 12-72 byte password required")
 		return
 	}
-	if actor(c).Role == model.Admin && in.Role != model.Trader {
-		fail(c, 403, "only super_admin can create admins")
+	if in.Role != model.Admin {
+		fail(c, 400, "create a new tenant to register a trader; only admins can be added to an existing tenant")
 		return
 	}
 	hash, err := HashPassword(in.Password)
@@ -141,7 +141,7 @@ func (a *API) saveUser(c *gin.Context, in updateUserInput, deleted bool) {
 		return
 	}
 	defer tx.Rollback()
-	// Serialize role/deactivation changes within a business to preserve an active admin.
+	// Serialize account changes with tenant suspension and preserve the trader owner.
 	var tenant uint64
 	if err = tx.QueryRowContext(c.Request.Context(), "SELECT id FROM tenants WHERE id=? FOR UPDATE", tenantID(c)).Scan(&tenant); err != nil {
 		databaseError(c, err)
@@ -152,11 +152,18 @@ func (a *API) saveUser(c *gin.Context, in updateUserInput, deleted bool) {
 		databaseError(c, err)
 		return
 	}
-	if actor(c).Role == model.Admin && (u.Role != model.Trader || (in.Role != nil && *in.Role != model.Trader)) {
-		fail(c, 403, "only super_admin can manage admins")
+	if u.Role == model.Trader && actor(c).Role != model.SuperAdmin {
+		fail(c, 403, "only super_admin can manage the trader account; use /me/password to change your password")
 		return
 	}
-	wasAdmin := u.Role == model.Admin && u.Active
+	if in.Role != nil && *in.Role != u.Role {
+		fail(c, 409, "roles cannot be changed between trader owners and tenant admins")
+		return
+	}
+	if u.Role == model.Trader && in.Active != nil && !*in.Active {
+		fail(c, 409, "suspend the trader's tenant instead of deactivating its owner")
+		return
+	}
 	if in.Name != nil {
 		u.Name = *in.Name
 	}
@@ -171,17 +178,6 @@ func (a *API) saveUser(c *gin.Context, in updateUserInput, deleted bool) {
 	}
 	if in.Password != nil {
 		u.PasswordHash = hash
-	}
-	if wasAdmin && (u.Role != model.Admin || !u.Active) {
-		var count int
-		if err = tx.QueryRowContext(c.Request.Context(), "SELECT COUNT(*) FROM users WHERE tenant_id=? AND role='admin' AND active=TRUE", tenant).Scan(&count); err != nil {
-			databaseError(c, err)
-			return
-		}
-		if count <= 1 {
-			fail(c, 409, "tenant must retain at least one active admin")
-			return
-		}
 	}
 	if _, err = tx.ExecContext(c.Request.Context(), "UPDATE users SET name=?,email=?,role=?,active=?,password_hash=? WHERE tenant_id=? AND id=?", u.Name, u.Email, u.Role, u.Active, u.PasswordHash, tenant, id); err != nil {
 		databaseError(c, err)

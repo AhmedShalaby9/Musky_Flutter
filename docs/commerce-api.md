@@ -1,0 +1,102 @@
+# Products and invoices
+
+All routes use `/api/v1/tenants/:tenantID` and the authenticated bearer session. Trader owners and supporting admins can operate only within their tenant. The super admin explicitly selects a tenant. IDs in request bodies do not bypass tenant checks.
+
+## Units and money
+
+- `quantity` always counts **whole boxes/packs**, not individual pieces. Fractional quantities are rejected.
+- `pieces_per_unit` describes the contents of one pack. Ten packs with 12 pieces per pack represent 120 pieces; selling three packs leaves seven packs.
+- All prices are **EGP per pack**. API money fields ending in `_minor` are integer piastres: `2950` means EGP 29.50. Three packs total `8850`, or EGP 88.50.
+- Pack size: 1–1,000,000. Stock: 0–1,000,000,000 packs. Price: 0–1,000,000,000,000 piastres. Invoice total: up to 100,000,000,000,000 piastres. Arithmetic is checked before multiplication/addition.
+- Invoices are sales on credit in this increment. Posting records the entire total as client debt. Payments, opening balances, tax, discounts, returns and PDF/printing are not yet implemented.
+
+## Products
+
+| Method | Route | Behavior |
+| --- | --- | --- |
+| GET | `/products` | Paginated list. Optional `q` searches title/code; `active=true` shows only active products. |
+| POST | `/products` | Create product and record opening stock; 201. |
+| GET | `/products/:id` | Read product; 200. |
+| PATCH | `/products/:id` | Update selected fields, including stock; 200. Requires current `version`. |
+| DELETE | `/products/:id?version=3` | Archive product; 204. History is retained. |
+
+```json
+{
+  "title": "Tea pack",
+  "code": "TEA-12",
+  "quantity": 10,
+  "pieces_per_unit": 12,
+  "unit_price_minor": 2950
+}
+```
+
+Creation requires all five fields. Title is 1–150 characters; code is 1–80 and unique within the tenant (case-insensitive under the documented database collation). Responses also include `id`, `tenant_id`, `active`, `version` and `created_at`.
+
+PATCH accepts any combination of the five fields and `active`, plus the required `version`. Example: `{"version":1,"quantity":15}` sets stock to 15 packs and records the delta in stock history. `{"version":2,"active":true}` restores an archived product. A stale version returns 409 rather than overwriting stock changed by another user/invoice. Refresh before retrying.
+
+## Invoice lifecycle
+
+```text
+draft --post--> posted --void--> void
+  |
+  +--cancel--> cancelled
+```
+
+Drafts can be edited and do not reserve or deduct stock. Cancelled drafts remain in history. Posted invoices cannot be edited/cancelled/deleted. Voiding reverses the complete invoice once; partial returns are not supported. A void cannot be undone.
+
+| Method | Route | Behavior |
+| --- | --- | --- |
+| GET | `/invoices` | Paginated, newest first. Optional `status=draft/posted/void/cancelled`. |
+| POST | `/invoices` | Create draft; 201. |
+| GET | `/invoices/:id` | Read invoice and line snapshots; 200. |
+| PUT | `/invoices/:id` | Replace draft contents with a complete body plus `version`; 200. |
+| DELETE | `/invoices/:id?version=1` | Cancel draft; returns preserved invoice, 200. |
+| POST | `/invoices/:id/post` | Body `{"version":1}`; post draft, 200. |
+| POST | `/invoices/:id/void` | Body `{"version":2,"reason":"Order cancelled"}`; void posted invoice, 200. |
+
+Draft creation example:
+
+```json
+{
+  "client_id": 1,
+  "issue_date": "2026-09-12",
+  "notes": "Deliver tomorrow",
+  "items": [
+    {"product_id": 1, "quantity": 3, "unit_price_minor": 2950}
+  ]
+}
+```
+
+`issue_date` is a valid `YYYY-MM-DD` date. Notes are optional (up to 2,000 characters). Include 1–100 distinct products; combine quantities for repeated products. Line `unit_price_minor` may be omitted to use the product's current price when saving the draft. All other totals, snapshots, tenant IDs, status and invoice numbers are server-controlled; unknown fields are rejected. Editing requires the same complete body plus the current `version`.
+
+Responses include client/name/address snapshots, immutable line snapshots, `total_minor`, `currency` (`EGP`), `status`, `version`, creator and timestamps. `number` is null for drafts/cancelled drafts. Posting assigns the next tenant-local number, displayed by Flutter as `INV-000001`.
+
+Posting verifies the client/products are active, sufficient stock exists, and each product's pack size still matches its draft snapshot. A pack-size change requires editing/resaving the draft. Historical titles, codes and prices do not change when a product is edited later.
+
+Stock changes, stock-history records, invoice status/number, and client-ledger entries commit in one MySQL transaction. Failed lines roll back the whole transaction. Commerce writes lock the tenant row before affected records, serializing writes within one trader's workspace and preventing overselling. Different tenants remain independent. Voiding restores invoiced packs even if the product has since been archived.
+
+Completed post/void/cancel transitions are idempotent: retrying the same transition returns the existing result without applying stock/debt effects again. Stale draft saves return 409. Creating a draft is not idempotent; after an uncertain create response, refresh the invoice list before creating another draft.
+
+## Financial overview
+
+`GET /financial-summary` returns:
+
+```json
+{
+  "currency": "EGP",
+  "receivables_minor": 8850,
+  "payables_minor": 0,
+  "net_minor": 8850,
+  "scope": "posted_invoices_and_voids"
+}
+```
+
+The ledger is grouped by client before totaling: positive client balances are receivables, negative balances are payables, and net is receivables minus payables. Archived clients remain included. In this increment only posted invoices and their voids populate the ledger, so payables normally remain zero. These figures exclude cash collections, opening balances, stock valuation and profit.
+
+Client lookup also supports `/clients?q=search&active=true&limit=50&offset=0` for the invoice editor. All list endpoints retain the existing pagination format.
+
+## Verification
+
+`MYSQL_COMMERCE_TEST_DSN` enables real-MySQL commerce tests against a **fresh dedicated database**. Tests cover pack arithmetic, exact money, cross-tenant IDs/foreign keys, duplicate codes, stale edits, snapshots, insufficient-stock rollback, competing invoice posts, idempotent transitions, voids and ledger totals. Data is left in the test database for inspection; no business database is modified.
+
+Implementation reference: [MySQL locking reads](https://dev.mysql.com/doc/refman/8.0/en/innodb-locking-reads.html).

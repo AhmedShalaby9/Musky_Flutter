@@ -43,16 +43,29 @@ func New(db *sql.DB) *gin.Engine {
 	v.POST("/tenants", onlySuper, a.createTenant)
 	v.PATCH("/tenants/:tenantID", onlySuper, a.updateTenant)
 	t := v.Group("/tenants/:tenantID", a.tenantScope)
-	t.GET("/users", managers, a.listUsers)
-	t.POST("/users", managers, a.createUser)
-	t.GET("/users/:id", managers, a.getUser)
-	t.PATCH("/users/:id", managers, a.updateUser)
-	t.DELETE("/users/:id", managers, a.deactivateUser)
+	t.GET("/users", a.listUsers)
+	t.POST("/users", accountManagers, a.createUser)
+	t.GET("/users/:id", a.getUser)
+	t.PATCH("/users/:id", accountManagers, a.updateUser)
+	t.DELETE("/users/:id", accountManagers, a.deactivateUser)
 	t.GET("/clients", a.listClients)
 	t.POST("/clients", a.createClient)
 	t.GET("/clients/:id", a.getClient)
 	t.PATCH("/clients/:id", a.updateClient)
-	t.DELETE("/clients/:id", managers, a.archiveClient)
+	t.DELETE("/clients/:id", a.archiveClient)
+	t.GET("/products", a.listProducts)
+	t.POST("/products", a.createProduct)
+	t.GET("/products/:id", a.getProduct)
+	t.PATCH("/products/:id", a.updateProduct)
+	t.DELETE("/products/:id", a.archiveProduct)
+	t.GET("/invoices", a.listInvoices)
+	t.POST("/invoices", a.createInvoice)
+	t.GET("/invoices/:id", a.getInvoice)
+	t.PUT("/invoices/:id", a.updateInvoice)
+	t.DELETE("/invoices/:id", a.cancelInvoice)
+	t.POST("/invoices/:id/post", a.postInvoice)
+	t.POST("/invoices/:id/void", a.voidInvoice)
+	t.GET("/financial-summary", a.financialSummary)
 	return r
 }
 
@@ -118,9 +131,9 @@ func onlySuper(c *gin.Context) {
 		fail(c, 403, "super_admin required")
 	}
 }
-func managers(c *gin.Context) {
-	if actor(c).Role == model.Trader {
-		fail(c, 403, "admin required")
+func accountManagers(c *gin.Context) {
+	if actor(c).Role == model.Admin {
+		fail(c, 403, "trader owner or super_admin required")
 	}
 }
 func (a *API) tenantScope(c *gin.Context) {

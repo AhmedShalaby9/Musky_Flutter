@@ -76,6 +76,15 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 		if exists != 0 {
 			continue
 		}
+		if file.Name() == "002_one_trader_per_tenant.sql" {
+			var incompatible int
+			if err = conn.QueryRowContext(ctx, "SELECT COUNT(*) FROM tenants t WHERE (SELECT COUNT(*) FROM users u WHERE u.tenant_id=t.id AND u.role='trader') <> 1").Scan(&incompatible); err != nil {
+				return err
+			}
+			if incompatible != 0 {
+				return fmt.Errorf("migration requires exactly one trader per existing tenant; assign missing owners or split shared tenants explicitly before upgrading")
+			}
+		}
 		body, err := migrations.ReadFile("migrations/" + file.Name())
 		if err != nil {
 			return err

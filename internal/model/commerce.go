@@ -1,0 +1,46 @@
+package model
+
+import "time"
+
+// Quantity and unit prices are measured in whole boxes/packs, not pieces.
+type Product struct {
+	ID             uint64    `json:"id"`
+	TenantID       uint64    `json:"tenant_id"`
+	Title          string    `json:"title"`
+	Code           string    `json:"code"`
+	Quantity       int64     `json:"quantity"`
+	PiecesPerUnit  int64     `json:"pieces_per_unit"`
+	UnitPriceMinor int64     `json:"unit_price_minor"`
+	Active         bool      `json:"active"`
+	Version        int64     `json:"version"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+type Invoice struct {
+	ID              uint64        `json:"id"`
+	TenantID        uint64        `json:"tenant_id"`
+	ClientID        uint64        `json:"client_id"`
+	CreatedByUserID uint64        `json:"created_by_user_id"`
+	Number          *int64        `json:"number"`
+	Status          string        `json:"status"`
+	Currency        string        `json:"currency"`
+	IssueDate       string        `json:"issue_date"`
+	ClientName      string        `json:"client_name"`
+	ClientAddress   string        `json:"client_address"`
+	Notes           string        `json:"notes"`
+	VoidReason      string        `json:"void_reason"`
+	TotalMinor      int64         `json:"total_minor"`
+	Version         int64         `json:"version"`
+	CreatedAt       time.Time     `json:"created_at"`
+	PostedAt        *time.Time    `json:"posted_at"`
+	VoidedAt        *time.Time    `json:"voided_at"`
+	Items           []InvoiceItem `json:"items,omitempty"`
+}
+type InvoiceItem struct {
+	ProductID      uint64 `json:"product_id"`
+	Title          string `json:"title"`
+	Code           string `json:"code"`
+	PiecesPerUnit  int64  `json:"pieces_per_unit"`
+	Quantity       int64  `json:"quantity"`
+	UnitPriceMinor int64  `json:"unit_price_minor"`
+	TotalMinor     int64  `json:"total_minor"`
+}
