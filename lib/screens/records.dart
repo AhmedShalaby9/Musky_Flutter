@@ -142,7 +142,6 @@ class _RecordsScreenState extends State<RecordsScreen> {
         .where(
           (row) => [
             'name',
-            'email',
             'phone',
             'id',
           ].any((key) => '${row[key] ?? ''}'.toLowerCase().contains(query)),
@@ -299,7 +298,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
                               dataRowMaxHeight: 66,
                               columns: [
                                 const DataColumn(label: Text('الاسم')),
-                                if (!_businesses)
+                                if (!_clients && !_businesses)
                                   const DataColumn(
                                     label: Text('البريد الإلكتروني'),
                                   ),
@@ -328,7 +327,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                             ),
                                           ),
                                         ),
-                                        if (!_businesses)
+                                        if (!_clients && !_businesses)
                                           DataCell(
                                             SizedBox(
                                               width: 200,
@@ -495,7 +494,7 @@ class ClientDialog extends StatefulWidget {
 class _ClientDialogState extends State<ClientDialog> {
   final _form = GlobalKey<FormState>();
   late final _fields = {
-    for (final key in ['name', 'email', 'phone', 'address', 'notes'])
+    for (final key in ['name', 'phone', 'address'])
       key: TextEditingController(text: widget.client?[key] as String? ?? ''),
   };
   String? _error;
@@ -581,10 +580,8 @@ class _ClientDialogState extends State<ClientDialog> {
                 ],
                 for (final entry in [
                   ('name', 'اسم العميل', 150),
-                  ('email', 'البريد الإلكتروني', 254),
                   ('phone', 'رقم الهاتف', 40),
                   ('address', 'العنوان', 500),
-                  ('notes', 'ملاحظات', 2000),
                 ])
                   Padding(
                     padding: const EdgeInsets.only(bottom: 16),
@@ -593,7 +590,6 @@ class _ClientDialogState extends State<ClientDialog> {
                       enabled: !_busy,
                       autofocus: entry.$1 == 'name',
                       maxLength: entry.$3,
-                      maxLines: entry.$1 == 'notes' ? 3 : 1,
                       decoration: InputDecoration(
                         labelText: entry.$2,
                         counterText: '',
@@ -602,14 +598,6 @@ class _ClientDialogState extends State<ClientDialog> {
                         if (entry.$1 == 'name' &&
                             (v == null || v.trim().isEmpty)) {
                           return 'أدخل اسم العميل.';
-                        }
-                        if (entry.$1 == 'email' &&
-                            v != null &&
-                            v.trim().isNotEmpty &&
-                            !RegExp(
-                              r'^[^\s@]+@[^\s@]+\.[^\s@]+$',
-                            ).hasMatch(v.trim())) {
-                          return 'أدخل بريداً إلكترونياً صحيحاً.';
                         }
                         return null;
                       },

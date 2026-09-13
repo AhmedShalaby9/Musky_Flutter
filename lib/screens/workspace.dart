@@ -374,20 +374,71 @@ class _WorkspaceState extends State<Workspace> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (_logoUrl != null && _logoUrl!.isNotEmpty) ...[
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(
-                    _logoUrl!,
+              GestureDetector(
+                onTap: _tenantId == null
+                    ? null
+                    : () async {
+                        final file = await openFile(
+                          acceptedTypeGroups: [
+                            XTypeGroup(
+                              label: 'Logo',
+                              extensions: ['png', 'jpg', 'jpeg', 'webp'],
+                            ),
+                          ],
+                        );
+                        if (file == null || !mounted) return;
+                        try {
+                          final uploaded = await widget.api.uploadTenantLogo(
+                            _tenantId!,
+                            file.path,
+                          );
+                          if (mounted) {
+                            setState(
+                              () => _logoUrl = uploaded['url'] as String?,
+                            );
+                          }
+                        } on ApiException catch (e) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(e.message)),
+                            );
+                          }
+                        }
+                      },
+                child: Tooltip(
+                  message: _tenantId != null ? 'تحديث شعار الشركة' : '',
+                  child: Container(
                     width: 120,
                     height: 120,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, _, _) =>
-                        const Icon(Icons.broken_image_outlined, size: 48),
+                    decoration: BoxDecoration(
+                      color: paper,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: line),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: _logoUrl != null && _logoUrl!.isNotEmpty
+                        ? Image.network(
+                            _logoUrl!,
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, _, _) => const Center(
+                              child: Icon(
+                                Icons.broken_image_outlined,
+                                size: 36,
+                                color: muted,
+                              ),
+                            ),
+                          )
+                        : const Center(
+                            child: Icon(
+                              Icons.image_outlined,
+                              size: 36,
+                              color: muted,
+                            ),
+                          ),
                   ),
                 ),
-                const SizedBox(height: 16),
-              ],
+              ),
+              const SizedBox(height: 20),
               for (final detail in [
                 ('الاسم', widget.user.name),
                 ('البريد الإلكتروني', widget.user.email),
@@ -408,49 +459,6 @@ class _WorkspaceState extends State<Workspace> {
                   ),
                 ),
               const Divider(),
-              if (_tenantId != null) ...[
-                const SizedBox(height: 16),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.image_outlined, size: 18),
-                  label: const Text('تحديث شعار الشركة'),
-                  onPressed: () async {
-                    final file = await openFile(
-                      acceptedTypeGroups: [
-                        XTypeGroup(
-                          label: 'Logo',
-                          extensions: ['png', 'jpg', 'jpeg', 'webp'],
-                        ),
-                      ],
-                    );
-                    if (file == null || !mounted) {
-                      return;
-                    }
-                    try {
-                      final uploaded = await widget.api.uploadTenantLogo(
-                        _tenantId!,
-                        file.path,
-                      );
-                      if (mounted) {
-                        setState(() => _logoUrl = uploaded['url'] as String?);
-                      }
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('تم تحديث شعار الشركة.'),
-                          ),
-                        );
-                      }
-                    } on ApiException catch (e) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(SnackBar(content: Text(e.message)));
-                      }
-                    }
-                  },
-                ),
-                const SizedBox(height: 8),
-              ],
               const SizedBox(height: 16),
               FilledButton.icon(
                 icon: const Icon(Icons.lock_outline, size: 18),
