@@ -744,6 +744,27 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
     }
   }
 
+  Future<void> _generatePdf() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final data = await widget.api.request('POST', '$_path/pdf');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('تم إنشاء ملف الفاتورة ورفعه: ${data['url'] ?? ''}'),
+          ),
+        );
+      }
+    } catch (e) {
+      _handle(e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) => PopScope(
     canPop: !_busy,
@@ -847,6 +868,11 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
               ),
       ),
       actions: [
+        OutlinedButton.icon(
+          onPressed: _busy || _invoice == null ? null : _generatePdf,
+          icon: const Icon(Icons.picture_as_pdf_outlined),
+          label: const Text('إنشاء PDF'),
+        ),
         TextButton(
           onPressed: _busy ? null : () => Navigator.pop(context),
           child: const Text('إغلاق'),
