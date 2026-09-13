@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:file_selector/file_selector.dart';
 import '../core/api.dart';
+import '../core/money.dart';
 import '../core/theme.dart';
 
 class RecordsScreen extends StatefulWidget {
@@ -349,6 +350,11 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                   ),
                                 if (_clients)
                                   const DataColumn(label: Text('الهاتف')),
+                                if (_clients)
+                                  const DataColumn(
+                                    label: Text('الرصيد'),
+                                    numeric: true,
+                                  ),
                                 if (!_clients && !_businesses)
                                   const DataColumn(label: Text('الدور')),
                                 const DataColumn(label: Text('الحالة')),
@@ -391,6 +397,12 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                               '${row['phone'] ?? ''}'.isEmpty
                                                   ? '—'
                                                   : '${row['phone']}',
+                                            ),
+                                          ),
+                                        if (_clients)
+                                          DataCell(
+                                            _BalanceCell(
+                                              minor: (row['balance_minor'] as num?)?.toInt() ?? 0,
                                             ),
                                           ),
                                         if (!_clients && !_businesses)
@@ -553,13 +565,41 @@ class _ClientDialogState extends State<ClientDialog> {
     for (final key in ['name', 'phone', 'address'])
       key: TextEditingController(text: widget.client?[key] as String? ?? ''),
   };
+  late final TextEditingController _balance = TextEditingController(
+    text: _formatBalance(widget.client?['opening_balance_minor']),
+  );
   String? _error;
   bool _busy = false;
+
+  static String _formatBalance(dynamic minor) {
+    if (minor == null) return '';
+    final v = (minor as num).toInt();
+    if (v == 0) return '';
+    final abs = v.abs();
+    final major = abs ~/ 100;
+    final cents = abs % 100;
+    final str = cents == 0 ? '$major' : '$major.${cents.toString().padLeft(2, '0')}';
+    return v < 0 ? '-$str' : str;
+  }
+
+  static int? _parseBalance(String text) {
+    final t = text.trim();
+    if (t.isEmpty) return 0;
+    final neg = t.startsWith('-');
+    final raw = neg ? t.substring(1) : t;
+    if (!RegExp(r'^\d+(\.\d{1,2})?$').hasMatch(raw)) return null;
+    final parts = raw.split('.');
+    var cents = int.parse(parts[0]) * 100;
+    if (parts.length == 2) cents += int.parse(parts[1].padRight(2, '0'));
+    return neg ? -cents : cents;
+  }
+
   @override
   void dispose() {
     for (final controller in _fields.values) {
       controller.dispose();
     }
+    _balance.dispose();
     super.dispose();
   }
 
@@ -577,6 +617,7 @@ class _ClientDialogState extends State<ClientDialog> {
           entry.key: entry.value.text.trim().isEmpty && entry.key != 'name'
               ? null
               : entry.value.text.trim(),
+        'opening_balance_minor': _parseBalance(_balance.text) ?? 0,
       };
       if (widget.user.isSuperAdmin && widget.client == null) {
         // Tenant creation inserts the sole trader first, before supporting admins.
@@ -662,6 +703,29 @@ class _ClientDialogState extends State<ClientDialog> {
                       },
                     ),
                   ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: TextFormField(
+                    controller: _balance,
+                    enabled: !_busy,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                      signed: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'الرصيد الافتتاحي (ج.م.)',
+                      hintText: '0.00',
+                      helperText: 'موجب: العميل مدين. سالب: أنت المدين.',
+                    ),
+                    validator: (v) {
+                      if (v != null && v.trim().isNotEmpty &&
+                          _parseBalance(v) == null) {
+                        return 'أدخل رقماً صحيحاً (مثال: 150 أو -75.50).';
+                      }
+                      return null;
+                    },
+                  ),
+                ),
               ],
             ),
           ),
@@ -677,6 +741,19 @@ class _ClientDialogState extends State<ClientDialog> {
           child: Text(_busy ? 'جارٍ الحفظ…' : 'حفظ العميل'),
         ),
       ],
+    ),
+  );
+}
+
+class _BalanceCell extends StatelessWidget {
+  const _BalanceCell({required this.minor});
+  final int minor;
+  @override
+  Widget build(BuildContext context) => Text(
+    egp(minor),
+    style: TextStyle(
+      color: minor < 0 ? const Color(0xFFA33624) : null,
+      fontWeight: FontWeight.w500,
     ),
   );
 }
