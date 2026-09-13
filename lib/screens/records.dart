@@ -106,6 +106,51 @@ class _RecordsScreenState extends State<RecordsScreen> {
     }
   }
 
+  Future<void> _delete(Map<String, dynamic> client) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('حذف العميل'),
+        content: Text('هل تريد حذف "${client['name']}" نهائياً؟'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('حذف'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() => _loading = true);
+    try {
+      await widget.api.request(
+        'DELETE',
+        'tenants/${widget.tenantId}/clients/${client['id']}',
+      );
+      if (mounted) {
+        await _load();
+      }
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      if (e.status == 401) {
+        widget.onExpired();
+      } else {
+        setState(() => _error = e.message);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'تعذّر حذف العميل. حاول مجدداً.');
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   Future<void> _toggle(Map<String, dynamic> client) async {
     setState(() => _loading = true);
     try {
@@ -409,6 +454,17 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                                         : Icons
                                                               .unarchive_outlined,
                                                     size: 19,
+                                                  ),
+                                                ),
+                                                IconButton(
+                                                  tooltip:
+                                                      'حذف ${row['name']}',
+                                                  onPressed: () =>
+                                                      _delete(row),
+                                                  icon: const Icon(
+                                                    Icons.delete_outline,
+                                                    size: 19,
+                                                    color: Colors.red,
                                                   ),
                                                 ),
                                               ],

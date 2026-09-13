@@ -108,6 +108,42 @@ class _CommerceScreenState extends State<CommerceScreen> {
     }
   }
 
+  Future<void> _delete(Map<String, dynamic> product) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('حذف المنتج'),
+        content: Text('هل تريد حذف "${product['title']}" نهائياً؟'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('حذف'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() => _busy = true);
+    try {
+      await widget.api.request(
+        'DELETE',
+        '$_base/${product['id']}',
+      );
+      if (mounted) {
+        await _load();
+      }
+    } catch (e) {
+      _handle(e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _toggle(Map<String, dynamic> product) async {
     setState(() => _busy = true);
     try {
@@ -385,6 +421,17 @@ class _CommerceScreenState extends State<CommerceScreen> {
                                                           : Icons
                                                                 .unarchive_outlined,
                                                       size: 19,
+                                                    ),
+                                                  ),
+                                                  IconButton(
+                                                    tooltip:
+                                                        'حذف ${row['title']}',
+                                                    onPressed: () =>
+                                                        _delete(row),
+                                                    icon: const Icon(
+                                                      Icons.delete_outline,
+                                                      size: 19,
+                                                      color: Colors.red,
                                                     ),
                                                   ),
                                                 ],
