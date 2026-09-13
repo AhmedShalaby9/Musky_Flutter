@@ -61,18 +61,15 @@ class HttpMuskyApi implements MuskyApi {
   HttpMuskyApi({
     String address = const String.fromEnvironment(
       'MUSKY_API_URL',
-      defaultValue: 'http://127.0.0.1:8080/api/v1',
+      defaultValue: 'http://169.58.36.30/api/v1',
     ),
   }) : _base = Uri.parse(address) {
-    final local = ['localhost', '127.0.0.1', '::1'].contains(_base.host);
     if (!_base.hasAuthority ||
         _base.userInfo.isNotEmpty ||
         _base.hasQuery ||
         _base.hasFragment ||
-        !(_base.scheme == 'https' || (_base.scheme == 'http' && local))) {
-      throw const ApiException(
-        'Use an HTTPS server address, or HTTP on localhost.',
-      );
+        (_base.scheme != 'https' && _base.scheme != 'http')) {
+      throw const ApiException('Invalid server address.');
     }
   }
   final Uri _base;
