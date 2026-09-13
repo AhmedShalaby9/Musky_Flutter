@@ -53,7 +53,7 @@ class _FinancialOverviewState extends State<FinancialOverview> {
       }
     } catch (_) {
       if (mounted) {
-        setState(() => _error = 'Unable to load balances. Please retry.');
+        setState(() => _error = 'تعذّر تحميل الأرصدة. حاول مجدداً.');
       }
     } finally {
       if (mounted) {
@@ -71,12 +71,12 @@ class _FinancialOverviewState extends State<FinancialOverview> {
           children: [
             Expanded(
               child: Text(
-                'Your business, at a glance',
+                'نظرة سريعة على عملك',
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
             ),
             IconButton(
-              tooltip: 'Refresh balances',
+              tooltip: 'تحديث الأرصدة',
               onPressed: _busy ? null : _load,
               icon: const Icon(Icons.refresh),
             ),
@@ -84,7 +84,7 @@ class _FinancialOverviewState extends State<FinancialOverview> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Welcome, ${widget.name}. Here is your workspace.',
+          'مرحباً، ${widget.name}. إليك مساحة عملك.',
           style: const TextStyle(color: muted),
         ),
         const SizedBox(height: 28),
@@ -92,7 +92,7 @@ class _FinancialOverviewState extends State<FinancialOverview> {
           const LinearProgressIndicator()
         else if (_error != null) ...[
           ErrorNotice(_error!),
-          TextButton(onPressed: _load, child: const Text('Retry')),
+          TextButton(onPressed: _load, child: const Text('إعادة المحاولة')),
         ] else
           LayoutBuilder(
             builder: (context, size) => Wrap(
@@ -101,19 +101,19 @@ class _FinancialOverviewState extends State<FinancialOverview> {
               children: [
                 for (final item in [
                   (
-                    'Client debts',
+                    'ديون العملاء',
                     'receivables_minor',
-                    'Money clients owe you',
+                    'المبالغ التي يدين بها العملاء',
                   ),
                   (
-                    'Amounts you owe',
+                    'المبالغ التي تدين بها',
                     'payables_minor',
-                    'Money you owe clients',
+                    'المبالغ التي تدين بها للعملاء',
                   ),
                   (
-                    'Net outstanding',
+                    'صافي المستحقات',
                     'net_minor',
-                    'Debts minus amounts you owe',
+                    'الديون مطروحاً منها ما تدين به',
                   ),
                 ])
                   Container(
@@ -155,7 +155,7 @@ class _FinancialOverviewState extends State<FinancialOverview> {
           ),
         const SizedBox(height: 20),
         const Text(
-          'Based on posted sales invoices and voids. Payments and opening balances are not included yet.',
+          'بناءً على الفواتير المُصدرة والملغاة. المدفوعات والأرصدة الافتتاحية غير مدرجة بعد.',
           style: TextStyle(color: muted),
         ),
         const SizedBox(height: 30),
@@ -170,7 +170,7 @@ class _FinancialOverviewState extends State<FinancialOverview> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'From stock to sale',
+                'من المخزون إلى البيع',
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w600,
@@ -179,14 +179,14 @@ class _FinancialOverviewState extends State<FinancialOverview> {
               ),
               const SizedBox(height: 12),
               const Text(
-                'Create a draft, review the packs and prices, then post your invoice.',
+                'أنشئ مسودة، راجع الحزم والأسعار، ثم أصدر فاتورتك.',
                 style: TextStyle(color: Color(0xFFB6C9C1)),
               ),
               const SizedBox(height: 22),
               FilledButton.icon(
                 onPressed: widget.onInvoices,
                 icon: const Icon(Icons.arrow_forward),
-                label: const Text('Open invoices'),
+                label: const Text('فتح الفواتير'),
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFFDAEDCE),
                   foregroundColor: ink,

@@ -75,7 +75,7 @@ class _RecordPickerState extends State<RecordPicker> {
       }
     } catch (_) {
       if (mounted && ticket == _ticket) {
-        setState(() => _error = 'Unable to load records.');
+        setState(() => _error = 'تعذّر تحميل السجلات.');
       }
     } finally {
       if (mounted && ticket == _ticket) {
@@ -86,7 +86,7 @@ class _RecordPickerState extends State<RecordPicker> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: Text(widget.products ? 'Select product' : 'Select client'),
+    title: Text(widget.products ? 'اختر منتجاً' : 'اختر عميلاً'),
     content: SizedBox(
       width: 560,
       height: 400,
@@ -97,8 +97,8 @@ class _RecordPickerState extends State<RecordPicker> {
             autofocus: true,
             decoration: InputDecoration(
               labelText: widget.products
-                  ? 'Search title or code'
-                  : 'Search name or phone',
+                  ? 'بحث بالاسم أو الكود'
+                  : 'بحث بالاسم أو الهاتف',
               prefixIcon: const Icon(Icons.search),
             ),
             onChanged: (_) {
@@ -118,11 +118,14 @@ class _RecordPickerState extends State<RecordPicker> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       ErrorNotice(_error!),
-                      TextButton(onPressed: _load, child: const Text('Retry')),
+                      TextButton(
+                        onPressed: _load,
+                        child: const Text('إعادة المحاولة'),
+                      ),
                     ],
                   )
                 : _rows.isEmpty
-                ? const Center(child: Text('No matching active records.'))
+                ? const Center(child: Text('لا توجد سجلات نشطة مطابقة.'))
                 : ListView.separated(
                     itemCount: _rows.length,
                     separatorBuilder: (_, index) => const Divider(height: 1),
@@ -134,7 +137,7 @@ class _RecordPickerState extends State<RecordPicker> {
                         ),
                         subtitle: Text(
                           widget.products
-                              ? '${row['code']} · ${row['quantity']} packs available · ${egp(row['unit_price_minor'] as int)} / pack'
+                              ? '${row['code']} · ${row['quantity']} حزمة متاحة · ${egp(row['unit_price_minor'] as int)} / الحزمة'
                               : '${row['phone'] ?? ''}',
                         ),
                         onTap: () => Navigator.pop(context, row),
@@ -147,7 +150,7 @@ class _RecordPickerState extends State<RecordPicker> {
             children: [
               Text('Page ${_offset ~/ 50 + 1}'),
               IconButton(
-                tooltip: 'Previous results',
+                tooltip: 'النتائج السابقة',
                 onPressed: _busy || _offset == 0
                     ? null
                     : () {
@@ -157,7 +160,7 @@ class _RecordPickerState extends State<RecordPicker> {
                 icon: const Icon(Icons.chevron_left),
               ),
               IconButton(
-                tooltip: 'More results',
+                tooltip: 'مزيد من النتائج',
                 onPressed: _busy || _rows.length < 50
                     ? null
                     : () {
@@ -174,7 +177,7 @@ class _RecordPickerState extends State<RecordPicker> {
     actions: [
       TextButton(
         onPressed: () => Navigator.pop(context),
-        child: const Text('Close'),
+        child: const Text('إغلاق'),
       ),
     ],
   );
@@ -303,7 +306,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
             ),
           );
         } else {
-          _error = 'An invoice can contain up to 100 products.';
+          _error = 'يمكن أن تحتوي الفاتورة على 100 منتج كحد أقصى.';
         }
       }
     });
@@ -314,12 +317,12 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
       return;
     }
     if (_clientId == null || _lines.isEmpty) {
-      setState(() => _error = 'Select a client and add at least one product.');
+      setState(() => _error = 'اختر عميلاً وأضف منتجاً واحداً على الأقل.');
       return;
     }
     final total = _lines.fold<int>(0, (sum, line) => sum + line.total);
     if (total > 100000000000000) {
-      setState(() => _error = 'Invoice total exceeds the supported limit.');
+      setState(() => _error = 'إجمالي الفاتورة يتجاوز الحد المسموح به.');
       return;
     }
     setState(() {
@@ -360,7 +363,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
       }
     } catch (_) {
       if (mounted) {
-        setState(() => _error = 'Unable to save the draft. Try again.');
+        setState(() => _error = 'تعذّر حفظ المسودة. حاول مجدداً.');
       }
     } finally {
       if (mounted) {
@@ -373,7 +376,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
   Widget build(BuildContext context) => PopScope(
     canPop: !_busy,
     child: AlertDialog(
-      title: Text(widget.invoice == null ? 'New invoice' : 'Edit draft'),
+      title: Text(widget.invoice == null ? 'فاتورة جديدة' : 'تعديل المسودة'),
       content: SizedBox(
         width: 920,
         height: MediaQuery.sizeOf(context).height * .65,
@@ -384,7 +387,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Quantities are whole packs. Prices are EGP per pack. A draft does not change stock.',
+                  'الكميات بالحزم الكاملة. الأسعار بالجنيه المصري للحزمة. المسودة لا تؤثر على المخزون.',
                   style: TextStyle(color: muted),
                 ),
                 const SizedBox(height: 20),
@@ -400,7 +403,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                     OutlinedButton.icon(
                       onPressed: _busy ? null : () => _pick(false),
                       icon: const Icon(Icons.person_outline),
-                      label: Text(_clientName ?? 'Select client'),
+                      label: Text(_clientName ?? 'اختر عميلاً'),
                     ),
                     SizedBox(
                       width: 210,
@@ -408,7 +411,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                         controller: _date,
                         enabled: !_busy,
                         decoration: const InputDecoration(
-                          labelText: 'Issue date (YYYY-MM-DD)',
+                          labelText: 'تاريخ الإصدار (YYYY-MM-DD)',
                         ),
                         validator: (value) {
                           final date = DateTime.tryParse(value ?? '');
@@ -419,7 +422,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                                   date.toIso8601String().substring(0, 10) !=
                                       value ||
                                   date.year < 1000
-                              ? 'Enter a valid date.'
+                              ? 'أدخل تاريخاً صحيحاً.'
                               : null;
                         },
                       ),
@@ -451,7 +454,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                                 ),
                               ),
                               IconButton(
-                                tooltip: 'Remove ${line.title}',
+                                tooltip: 'إزالة ${line.title}',
                                 onPressed: _busy
                                     ? null
                                     : () {
@@ -478,7 +481,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                                   enabled: !_busy,
                                   keyboardType: TextInputType.number,
                                   decoration: const InputDecoration(
-                                    labelText: 'Quantity (packs)',
+                                    labelText: 'الكمية (حزم)',
                                   ),
                                   onChanged: (_) => setState(() {}),
                                   validator: (v) {
@@ -486,7 +489,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                                     return qty == null ||
                                             qty < 1 ||
                                             qty > 1000000000
-                                        ? 'Use 1–1,000,000,000.'
+                                        ? 'أدخل قيمة من 1 إلى 1,000,000,000.'
                                         : null;
                                   },
                                 ),
@@ -501,11 +504,11 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                                         decimal: true,
                                       ),
                                   decoration: const InputDecoration(
-                                    labelText: 'Price / pack (EGP)',
+                                    labelText: 'السعر / الحزمة (ج.م)',
                                   ),
                                   onChanged: (_) => setState(() {}),
                                   validator: (v) => parseMoney(v ?? '') == null
-                                      ? 'Use up to 2 decimals.'
+                                      ? 'أدخل حتى خانتين عشريتين.'
                                       : null,
                                 ),
                               ),
@@ -524,7 +527,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                 OutlinedButton.icon(
                   onPressed: _busy ? null : () => _pick(true),
                   icon: const Icon(Icons.add),
-                  label: const Text('Add product line'),
+                  label: const Text('إضافة منتج'),
                 ),
                 const SizedBox(height: 22),
                 TextFormField(
@@ -533,7 +536,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                   maxLines: 2,
                   maxLength: 2000,
                   decoration: const InputDecoration(
-                    labelText: 'Notes',
+                    labelText: 'ملاحظات',
                     counterText: '',
                   ),
                 ),
@@ -541,7 +544,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                 Align(
                   alignment: Alignment.centerRight,
                   child: Text(
-                    'Total: ${egp(_lines.fold<int>(0, (sum, line) => sum + line.total))}',
+                    'الإجمالي: ${egp(_lines.fold<int>(0, (sum, line) => sum + line.total))}',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
@@ -553,11 +556,11 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
       actions: [
         TextButton(
           onPressed: _busy ? null : () => Navigator.pop(context),
-          child: const Text('Close'),
+          child: const Text('إغلاق'),
         ),
         FilledButton(
           onPressed: _busy ? null : _save,
-          child: Text(_busy ? 'Saving…' : 'Save draft'),
+          child: Text(_busy ? 'جارٍ الحفظ…' : 'حفظ المسودة'),
         ),
       ],
     ),
@@ -718,10 +721,12 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
       title: Row(
         children: [
           Expanded(
-            child: Text(_invoice == null ? 'Invoice' : invoiceLabel(_invoice!)),
+            child: Text(
+              _invoice == null ? 'الفاتورة' : invoiceLabel(_invoice!),
+            ),
           ),
           IconButton(
-            tooltip: 'Refresh invoice',
+            tooltip: 'تحديث الفاتورة',
             onPressed: _busy ? null : _load,
             icon: const Icon(Icons.refresh),
           ),
@@ -757,11 +762,11 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
                         scrollDirection: Axis.horizontal,
                         child: DataTable(
                           columns: const [
-                            DataColumn(label: Text('Product')),
-                            DataColumn(label: Text('Packs')),
-                            DataColumn(label: Text('Pieces/pack')),
-                            DataColumn(label: Text('Price/pack')),
-                            DataColumn(label: Text('Total')),
+                            DataColumn(label: Text('المنتج')),
+                            DataColumn(label: Text('الحزم')),
+                            DataColumn(label: Text('القطع/الحزمة')),
+                            DataColumn(label: Text('السعر/الحزمة')),
+                            DataColumn(label: Text('الإجمالي')),
                           ],
                           rows: [
                             for (final item in _invoice!['items'] as List)
@@ -785,17 +790,17 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
                       Align(
                         alignment: Alignment.centerRight,
                         child: Text(
-                          'Total: ${egp(_invoice!['total_minor'] as int)}',
+                          'الإجمالي: ${egp(_invoice!['total_minor'] as int)}',
                           style: Theme.of(context).textTheme.titleLarge,
                         ),
                       ),
                       if ('${_invoice!['notes']}'.isNotEmpty) ...[
                         const SizedBox(height: 20),
-                        Text('Notes: ${_invoice!['notes']}'),
+                        Text('ملاحظات: ${_invoice!['notes']}'),
                       ],
                       if (_invoice!['status'] == 'void') ...[
                         const SizedBox(height: 20),
-                        Text('Void reason: ${_invoice!['void_reason']}'),
+                        Text('سبب الإلغاء: ${_invoice!['void_reason']}'),
                       ],
                     ],
                   ],
@@ -805,26 +810,26 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
       actions: [
         TextButton(
           onPressed: _busy ? null : () => Navigator.pop(context),
-          child: const Text('Close'),
+          child: const Text('إغلاق'),
         ),
         if (_invoice?['status'] == 'draft') ...[
           TextButton(
             onPressed: _busy ? null : () => _transition('cancel'),
-            child: const Text('Cancel draft'),
+            child: const Text('إلغاء المسودة'),
           ),
           OutlinedButton(
             onPressed: _busy ? null : _edit,
-            child: const Text('Edit draft'),
+            child: const Text('تعديل المسودة'),
           ),
           FilledButton(
             onPressed: _busy ? null : () => _transition('post'),
-            child: const Text('Post invoice'),
+            child: const Text('إصدار الفاتورة'),
           ),
         ],
         if (_invoice?['status'] == 'posted')
           OutlinedButton(
             onPressed: _busy ? null : () => _transition('void'),
-            child: const Text('Void invoice'),
+            child: const Text('إلغاء الفاتورة'),
           ),
       ],
     ),
@@ -848,7 +853,7 @@ class _VoidReasonDialogState extends State<VoidReasonDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Void invoice'),
+    title: const Text('إلغاء الفاتورة'),
     content: SizedBox(
       width: 420,
       child: Form(
@@ -857,7 +862,7 @@ class _VoidReasonDialogState extends State<VoidReasonDialog> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-              'Voiding restores the invoiced packs and reverses the client debt. This cannot be undone.',
+              'إلغاء الفاتورة يُعيد الحزم إلى المخزون ويلغي دين العميل. لا يمكن التراجع.',
             ),
             const SizedBox(height: 20),
             TextFormField(
@@ -865,9 +870,9 @@ class _VoidReasonDialogState extends State<VoidReasonDialog> {
               autofocus: true,
               maxLength: 500,
               maxLines: 3,
-              decoration: const InputDecoration(labelText: 'Reason'),
+              decoration: const InputDecoration(labelText: 'السبب'),
               validator: (v) =>
-                  v == null || v.trim().isEmpty ? 'Enter a reason.' : null,
+                  v == null || v.trim().isEmpty ? 'أدخل السبب.' : null,
             ),
           ],
         ),
@@ -876,7 +881,7 @@ class _VoidReasonDialogState extends State<VoidReasonDialog> {
     actions: [
       TextButton(
         onPressed: () => Navigator.pop(context),
-        child: const Text('Go back'),
+        child: const Text('رجوع'),
       ),
       FilledButton(
         onPressed: () {
@@ -884,7 +889,7 @@ class _VoidReasonDialogState extends State<VoidReasonDialog> {
             Navigator.pop(context, _reason.text.trim());
           }
         },
-        child: const Text('Confirm void'),
+        child: const Text('تأكيد الإلغاء'),
       ),
     ],
   );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'core/api.dart';
 import 'core/theme.dart';
 import 'screens/login.dart';
@@ -46,6 +47,9 @@ class _MuskyAppState extends State<MuskyApp> {
   Widget build(BuildContext context) => MaterialApp(
     title: 'Musky',
     debugShowCheckedModeBanner: false,
+    locale: const Locale('ar'),
+    supportedLocales: const [Locale('ar')],
+    localizationsDelegates: GlobalMaterialLocalizations.delegates,
     theme: muskyTheme(),
     home: _api == null
         ? Scaffold(

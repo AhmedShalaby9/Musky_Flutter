@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:file_selector/file_selector.dart';
 import '../core/api.dart';
 import '../core/theme.dart';
 
@@ -29,8 +30,8 @@ class _RecordsScreenState extends State<RecordsScreen> {
   bool _loading = true;
   String? _error;
   int _offset = 0, _requestId = 0;
-  bool get _clients => widget.section == 'Clients';
-  bool get _businesses => widget.section == 'Businesses';
+  bool get _clients => widget.section == 'العملاء';
+  bool get _businesses => widget.section == 'الأعمال';
   @override
   void initState() {
     super.initState();
@@ -69,7 +70,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
       }
     } catch (_) {
       if (mounted && requestId == _requestId) {
-        setState(() => _error = 'Unable to load these records. Please retry.');
+        setState(() => _error = 'تعذّر تحميل السجلات. حاول مجدداً.');
       }
     } finally {
       if (mounted && requestId == _requestId) {
@@ -88,6 +89,17 @@ class _RecordsScreenState extends State<RecordsScreen> {
         client: client,
         onExpired: widget.onExpired,
       ),
+    );
+    if (saved == true && mounted) {
+      await _load();
+    }
+  }
+
+  Future<void> _addTrader() async {
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (_) =>
+          TraderDialog(api: widget.api, onExpired: widget.onExpired),
     );
     if (saved == true && mounted) {
       await _load();
@@ -114,7 +126,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
       }
     } catch (_) {
       if (mounted) {
-        setState(() => _error = 'Unable to update the client. Try again.');
+        setState(() => _error = 'تعذّر تحديث العميل. حاول مجدداً.');
       }
     } finally {
       if (mounted) {
@@ -152,10 +164,10 @@ class _RecordsScreenState extends State<RecordsScreen> {
                   const SizedBox(height: 8),
                   Text(
                     _clients
-                        ? 'The people you do business with.'
+                        ? 'الأشخاص الذين تتعامل معهم.'
                         : _businesses
-                        ? 'A dedicated workspace for each trader.'
-                        : 'The people with access to this workspace.',
+                        ? 'مساحة عمل مخصصة لكل تاجر.'
+                        : 'الأشخاص الذين يصلون إلى مساحة العمل.',
                     style: const TextStyle(color: muted),
                   ),
                 ],
@@ -165,7 +177,13 @@ class _RecordsScreenState extends State<RecordsScreen> {
               FilledButton.icon(
                 onPressed: _loading ? null : () => _edit(),
                 icon: const Icon(Icons.add, size: 19),
-                label: const Text('Add client'),
+                label: const Text('إضافة عميل'),
+              ),
+            if (_businesses)
+              FilledButton.icon(
+                onPressed: _loading ? null : _addTrader,
+                icon: const Icon(Icons.add, size: 19),
+                label: const Text('إضافة تاجر'),
               ),
           ],
         ),
@@ -177,7 +195,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
                 controller: _search,
                 onChanged: (_) => setState(() {}),
                 decoration: const InputDecoration(
-                  hintText: 'Search this page',
+                  hintText: 'بحث في هذه الصفحة',
                   prefixIcon: Icon(Icons.search),
                   contentPadding: EdgeInsets.symmetric(
                     horizontal: 14,
@@ -189,7 +207,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
             const SizedBox(width: 12),
             IconButton(
               onPressed: _loading ? null : _load,
-              tooltip: 'Refresh',
+              tooltip: 'تحديث',
               icon: const Icon(Icons.refresh),
             ),
           ],
@@ -217,7 +235,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
                           const SizedBox(height: 16),
                           OutlinedButton(
                             onPressed: _load,
-                            child: const Text('Retry'),
+                            child: const Text('إعادة المحاولة'),
                           ),
                         ],
                       ),
@@ -238,8 +256,8 @@ class _RecordsScreenState extends State<RecordsScreen> {
                           const SizedBox(height: 16),
                           Text(
                             query.isNotEmpty
-                                ? 'No matching records on this page'
-                                : 'No ${widget.section.toLowerCase()} on this page',
+                                ? 'لا توجد سجلات مطابقة في هذه الصفحة'
+                                : 'لا توجد سجلات في هذه الصفحة',
                             style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
@@ -248,10 +266,10 @@ class _RecordsScreenState extends State<RecordsScreen> {
                           const SizedBox(height: 8),
                           Text(
                             query.isNotEmpty
-                                ? 'Try another search or clear the search field.'
+                                ? 'جرّب بحثاً آخر أو امسح حقل البحث.'
                                 : _clients
-                                ? 'Add your first client to start organizing your contacts.'
-                                : 'Refresh after records have been created.',
+                                ? 'أضف أول عميل لتنظيم جهات الاتصال.'
+                                : 'حدّث الصفحة بعد إنشاء السجلات.',
                             style: const TextStyle(color: muted),
                           ),
                         ],
@@ -280,16 +298,18 @@ class _RecordsScreenState extends State<RecordsScreen> {
                               dataRowMinHeight: 66,
                               dataRowMaxHeight: 66,
                               columns: [
-                                const DataColumn(label: Text('NAME')),
+                                const DataColumn(label: Text('الاسم')),
                                 if (!_businesses)
-                                  const DataColumn(label: Text('EMAIL')),
+                                  const DataColumn(
+                                    label: Text('البريد الإلكتروني'),
+                                  ),
                                 if (_clients)
-                                  const DataColumn(label: Text('PHONE')),
+                                  const DataColumn(label: Text('الهاتف')),
                                 if (!_clients && !_businesses)
-                                  const DataColumn(label: Text('ROLE')),
-                                const DataColumn(label: Text('STATUS')),
+                                  const DataColumn(label: Text('الدور')),
+                                const DataColumn(label: Text('الحالة')),
                                 if (_clients || _businesses)
-                                  const DataColumn(label: Text('ACTIONS')),
+                                  const DataColumn(label: Text('الإجراءات')),
                               ],
                               rows: rows
                                   .map(
@@ -333,8 +353,8 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                           DataCell(
                                             Text(
                                               row['role'] == 'trader'
-                                                  ? 'Trader / owner'
-                                                  : 'Admin',
+                                                  ? 'تاجر / مالك'
+                                                  : 'مسؤول',
                                             ),
                                           ),
                                         DataCell(
@@ -352,10 +372,10 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                             ),
                                             child: Text(
                                               row['active'] == true
-                                                  ? 'Active'
+                                                  ? 'نشط'
                                                   : _clients
-                                                  ? 'Archived'
-                                                  : 'Inactive',
+                                                  ? 'مؤرشف'
+                                                  : 'غير نشط',
                                               style: TextStyle(
                                                 fontSize: 12,
                                                 color: row['active'] == true
@@ -372,7 +392,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                               children: [
                                                 IconButton(
                                                   tooltip:
-                                                      'Edit ${row['name']}',
+                                                      'تعديل ${row['name']}',
                                                   onPressed: () => _edit(row),
                                                   icon: const Icon(
                                                     Icons.edit_outlined,
@@ -381,8 +401,8 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                                 ),
                                                 IconButton(
                                                   tooltip: row['active'] == true
-                                                      ? 'Archive ${row['name']}'
-                                                      : 'Restore ${row['name']}',
+                                                      ? 'أرشفة ${row['name']}'
+                                                      : 'استعادة ${row['name']}',
                                                   onPressed: () => _toggle(row),
                                                   icon: Icon(
                                                     row['active'] == true
@@ -402,7 +422,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                                   ? () => widget.onTenant(row)
                                                   : null,
                                               child: const Text(
-                                                'Open workspace',
+                                                'فتح مساحة العمل',
                                               ),
                                             ),
                                           ),
@@ -423,12 +443,12 @@ class _RecordsScreenState extends State<RecordsScreen> {
           children: [
             Expanded(
               child: Text(
-                'Page ${_offset ~/ 50 + 1} · ${_rows.length} records${query.isEmpty ? '' : ' · ${rows.length} matches'}',
+                'صفحة ${_offset ~/ 50 + 1} · ${_rows.length} سجل${query.isEmpty ? '' : ' · ${rows.length} مطابق'}',
                 style: const TextStyle(color: muted, fontSize: 12),
               ),
             ),
             IconButton(
-              tooltip: 'Previous page',
+              tooltip: 'الصفحة السابقة',
               onPressed: _loading || _offset == 0
                   ? null
                   : () {
@@ -438,7 +458,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
               icon: const Icon(Icons.chevron_left),
             ),
             IconButton(
-              tooltip: 'Next page',
+              tooltip: 'الصفحة التالية',
               onPressed: _loading || _rows.length < 50
                   ? null
                   : () {
@@ -533,7 +553,7 @@ class _ClientDialogState extends State<ClientDialog> {
       }
     } catch (_) {
       if (mounted) {
-        setState(() => _error = 'Unable to save the client. Please try again.');
+        setState(() => _error = 'تعذّر حفظ العميل. حاول مجدداً.');
       }
     } finally {
       if (mounted) {
@@ -546,7 +566,7 @@ class _ClientDialogState extends State<ClientDialog> {
   Widget build(BuildContext context) => PopScope(
     canPop: !_busy,
     child: AlertDialog(
-      title: Text(widget.client == null ? 'Add client' : 'Edit client'),
+      title: Text(widget.client == null ? 'إضافة عميل' : 'تعديل عميل'),
       content: SizedBox(
         width: 480,
         child: SingleChildScrollView(
@@ -560,11 +580,11 @@ class _ClientDialogState extends State<ClientDialog> {
                   const SizedBox(height: 16),
                 ],
                 for (final entry in [
-                  ('name', 'Client name', 150),
-                  ('email', 'Email address', 254),
-                  ('phone', 'Phone number', 40),
-                  ('address', 'Address', 500),
-                  ('notes', 'Notes', 2000),
+                  ('name', 'اسم العميل', 150),
+                  ('email', 'البريد الإلكتروني', 254),
+                  ('phone', 'رقم الهاتف', 40),
+                  ('address', 'العنوان', 500),
+                  ('notes', 'ملاحظات', 2000),
                 ])
                   Padding(
                     padding: const EdgeInsets.only(bottom: 16),
@@ -581,7 +601,7 @@ class _ClientDialogState extends State<ClientDialog> {
                       validator: (v) {
                         if (entry.$1 == 'name' &&
                             (v == null || v.trim().isEmpty)) {
-                          return 'Enter a client name.';
+                          return 'أدخل اسم العميل.';
                         }
                         if (entry.$1 == 'email' &&
                             v != null &&
@@ -589,7 +609,7 @@ class _ClientDialogState extends State<ClientDialog> {
                             !RegExp(
                               r'^[^\s@]+@[^\s@]+\.[^\s@]+$',
                             ).hasMatch(v.trim())) {
-                          return 'Enter a valid email address.';
+                          return 'أدخل بريداً إلكترونياً صحيحاً.';
                         }
                         return null;
                       },
@@ -603,11 +623,215 @@ class _ClientDialogState extends State<ClientDialog> {
       actions: [
         TextButton(
           onPressed: _busy ? null : () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: const Text('إلغاء'),
         ),
         FilledButton(
           onPressed: _busy ? null : _save,
-          child: Text(_busy ? 'Saving…' : 'Save client'),
+          child: Text(_busy ? 'جارٍ الحفظ…' : 'حفظ العميل'),
+        ),
+      ],
+    ),
+  );
+}
+
+class TraderDialog extends StatefulWidget {
+  const TraderDialog({super.key, required this.api, required this.onExpired});
+  final MuskyApi api;
+  final VoidCallback onExpired;
+  @override
+  State<TraderDialog> createState() => _TraderDialogState();
+}
+
+class _TraderDialogState extends State<TraderDialog> {
+  final _form = GlobalKey<FormState>();
+  final _businessName = TextEditingController();
+  final _traderName = TextEditingController();
+  final _traderEmail = TextEditingController();
+  final _traderPassword = TextEditingController();
+  bool _obscure = true;
+  String? _logoPath;
+  String? _error;
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _businessName.dispose();
+    _traderName.dispose();
+    _traderEmail.dispose();
+    _traderPassword.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_busy || !_form.currentState!.validate()) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final tenant = await widget.api.createTenant(
+        _businessName.text.trim(),
+        _traderName.text.trim(),
+        _traderEmail.text.trim(),
+        _traderPassword.text,
+      );
+      if (_logoPath != null) {
+        await widget.api.uploadTenantLogo(tenant['id'] as int, _logoPath!);
+      }
+      if (mounted) Navigator.pop(context, true);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      if (e.status == 401) {
+        Navigator.pop(context);
+        widget.onExpired();
+      } else {
+        setState(() => _error = e.message);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'تعذّر إنشاء التاجر. حاول مجدداً.');
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => PopScope(
+    canPop: !_busy,
+    child: AlertDialog(
+      title: const Text('إضافة تاجر'),
+      content: SizedBox(
+        width: 480,
+        child: SingleChildScrollView(
+          child: Form(
+            key: _form,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (_error != null) ...[
+                  ErrorNotice(_error!),
+                  const SizedBox(height: 16),
+                ],
+                const Text(
+                  'النشاط التجاري',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: _busy
+                      ? null
+                      : () async {
+                          final file = await openFile(
+                            acceptedTypeGroups: [
+                              XTypeGroup(
+                                label: 'Logo',
+                                extensions: ['png', 'jpg', 'jpeg', 'webp'],
+                              ),
+                            ],
+                          );
+                          if (file != null && mounted)
+                            setState(() => _logoPath = file.path);
+                        },
+                  icon: const Icon(Icons.image_outlined),
+                  label: Text(
+                    _logoPath == null
+                        ? 'Ø§Ø®ØªÙŠØ§Ø± Ø´Ø¹Ø§Ø± Ø§Ù„Ø´Ø±ÙƒØ©'
+                        : _logoPath!.split(RegExp(r'[\\/]')).last,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _businessName,
+                  enabled: !_busy,
+                  autofocus: true,
+                  maxLength: 150,
+                  decoration: const InputDecoration(
+                    labelText: 'اسم النشاط التجاري',
+                    counterText: '',
+                  ),
+                  validator: (v) => (v == null || v.trim().isEmpty)
+                      ? 'أدخل اسم النشاط التجاري.'
+                      : null,
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'حساب التاجر',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: _traderName,
+                  enabled: !_busy,
+                  maxLength: 150,
+                  decoration: const InputDecoration(
+                    labelText: 'الاسم الكامل',
+                    counterText: '',
+                  ),
+                  validator: (v) => (v == null || v.trim().isEmpty)
+                      ? 'أدخل اسم التاجر.'
+                      : null,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _traderEmail,
+                  enabled: !_busy,
+                  maxLength: 254,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'البريد الإلكتروني',
+                    counterText: '',
+                  ),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty)
+                      return 'أدخل بريداً إلكترونياً.';
+                    if (!RegExp(
+                      r'^[^\s@]+@[^\s@]+\.[^\s@]+$',
+                    ).hasMatch(v.trim())) {
+                      return 'Enter a valid email address.';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _traderPassword,
+                  enabled: !_busy,
+                  obscureText: _obscure,
+                  decoration: InputDecoration(
+                    labelText: 'كلمة المرور',
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscure
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                      ),
+                      onPressed: () => setState(() => _obscure = !_obscure),
+                    ),
+                  ),
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'أدخل كلمة المرور.';
+                    if (v.length < 12)
+                      return 'يجب أن تكون كلمة المرور 12 حرفاً على الأقل.';
+                    if (v.length > 72)
+                      return 'يجب ألا تتجاوز كلمة المرور 72 حرفاً.';
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _busy ? null : () => Navigator.pop(context),
+          child: const Text('إلغاء'),
+        ),
+        FilledButton(
+          onPressed: _busy ? null : _save,
+          child: Text(_busy ? 'جارٍ الإنشاء…' : 'إنشاء تاجر'),
         ),
       ],
     ),

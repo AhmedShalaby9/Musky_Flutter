@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:file_selector/file_selector.dart';
 import '../core/api.dart';
 import '../core/theme.dart';
 import 'records.dart';
@@ -21,12 +22,30 @@ class Workspace extends StatefulWidget {
 }
 
 class _WorkspaceState extends State<Workspace> {
-  late String _section = widget.user.isSuperAdmin ? 'Businesses' : 'Overview';
+  late String _section = widget.user.isSuperAdmin ? 'الأعمال' : 'نظرة عامة';
   late int? _tenantId = widget.user.tenantId;
   String? _tenantName;
+  String? _logoUrl;
   bool _signingOut = false;
+  @override
+  void initState() {
+    super.initState();
+    _logoUrl = widget.user.logoUrl;
+    _refreshProfile();
+  }
+
+  Future<void> _refreshProfile() async {
+    if (widget.user.tenantId == null) return;
+    try {
+      final user = await widget.api.currentUser();
+      if (mounted) setState(() => _logoUrl = user.logoUrl);
+    } catch (_) {
+      // The login payload remains a valid fallback if profile refresh fails.
+    }
+  }
+
   void _expired() =>
-      widget.onSignedOut('Your session has expired. Please sign in again.');
+      widget.onSignedOut('انتهت جلستك. يرجى تسجيل الدخول مجدداً.');
   Future<void> _logout() async {
     if (_signingOut) {
       return;
@@ -36,8 +55,7 @@ class _WorkspaceState extends State<Workspace> {
     try {
       await widget.api.logout();
     } catch (_) {
-      notice =
-          'Signed out on this device. The server could not be reached to end the remote session.';
+      notice = 'تم تسجيل الخروج. تعذّر إنهاء الجلسة على الخادم.';
     }
     if (mounted) {
       widget.onSignedOut(notice);
@@ -149,7 +167,7 @@ class _WorkspaceState extends State<Workspace> {
                               child: Align(
                                 alignment: Alignment.centerLeft,
                                 child: Text(
-                                  user.isSuperAdmin ? 'PLATFORM' : 'WORKSPACE',
+                                  user.isSuperAdmin ? 'المنصة' : 'مساحة العمل',
                                   style: const TextStyle(
                                     fontSize: 10,
                                     letterSpacing: 1.5,
@@ -159,33 +177,33 @@ class _WorkspaceState extends State<Workspace> {
                               ),
                             ),
                           if (user.isSuperAdmin)
-                            nav('Businesses', Icons.domain_outlined),
+                            nav('الأعمال', Icons.domain_outlined),
                           nav(
-                            'Overview',
+                            'نظرة عامة',
                             Icons.space_dashboard_outlined,
                             enabled: _tenantId != null,
                           ),
                           nav(
-                            'Clients',
+                            'العملاء',
                             Icons.people_outline,
                             enabled: _tenantId != null,
                           ),
                           nav(
-                            'Products',
+                            'المنتجات',
                             Icons.inventory_2_outlined,
                             enabled: _tenantId != null,
                           ),
                           nav(
-                            'Invoices',
+                            'الفواتير',
                             Icons.receipt_long_outlined,
                             enabled: _tenantId != null,
                           ),
                           nav(
-                            'Team',
+                            'الفريق',
                             Icons.badge_outlined,
                             enabled: _tenantId != null,
                           ),
-                          nav('Account', Icons.person_outline),
+                          nav('الحساب', Icons.person_outline),
                         ],
                       ),
                     ),
@@ -194,7 +212,7 @@ class _WorkspaceState extends State<Workspace> {
                   Padding(
                     padding: const EdgeInsets.all(12),
                     child: Tooltip(
-                      message: 'Sign out',
+                      message: 'تسجيل الخروج',
                       child: TextButton(
                         onPressed: _signingOut ? null : _logout,
                         child: compact
@@ -204,7 +222,9 @@ class _WorkspaceState extends State<Workspace> {
                                   const Icon(Icons.logout, size: 20),
                                   const SizedBox(width: 12),
                                   Text(
-                                    _signingOut ? 'Signing out…' : 'Sign out',
+                                    _signingOut
+                                        ? 'جارٍ الخروج…'
+                                        : 'تسجيل الخروج',
                                   ),
                                 ],
                               ),
@@ -236,8 +256,8 @@ class _WorkspaceState extends State<Workspace> {
                               Text(
                                 _tenantName ??
                                     (_tenantId == null
-                                        ? 'Platform administration'
-                                        : 'Your trading workspace'),
+                                        ? 'إدارة المنصة'
+                                        : 'مساحة العمل التجارية'),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
@@ -246,8 +266,8 @@ class _WorkspaceState extends State<Workspace> {
                               ),
                               Text(
                                 _tenantId == null
-                                    ? 'Manage trader workspaces'
-                                    : 'Workspace #$_tenantId',
+                                    ? 'إدارة مساحات عمل التجار'
+                                    : 'مساحة العمل #$_tenantId',
                                 style: Theme.of(context).textTheme.bodySmall,
                               ),
                             ],
@@ -290,14 +310,14 @@ class _WorkspaceState extends State<Workspace> {
                     child: Padding(
                       padding: EdgeInsets.all(compact ? 24 : 36),
                       child: switch (_section) {
-                        'Products' || 'Invoices' => CommerceScreen(
+                        'المنتجات' || 'الفواتير' => CommerceScreen(
                           key: ValueKey('$_section:$_tenantId'),
                           api: widget.api,
                           tenantId: _tenantId!,
-                          products: _section == 'Products',
+                          products: _section == 'المنتجات',
                           onExpired: _expired,
                         ),
-                        'Clients' || 'Team' || 'Businesses' => RecordsScreen(
+                        'العملاء' || 'الفريق' || 'الأعمال' => RecordsScreen(
                           key: ValueKey('$_section:$_tenantId'),
                           api: widget.api,
                           user: user,
@@ -307,10 +327,10 @@ class _WorkspaceState extends State<Workspace> {
                           onTenant: (tenant) => setState(() {
                             _tenantId = tenant['id'] as int;
                             _tenantName = tenant['name'] as String;
-                            _section = 'Overview';
+                            _section = 'نظرة عامة';
                           }),
                         ),
-                        'Account' => _account(),
+                        'الحساب' => _account(),
                         _ => _overview(),
                       },
                     ),
@@ -330,16 +350,16 @@ class _WorkspaceState extends State<Workspace> {
     tenantId: _tenantId!,
     name: widget.user.name,
     onExpired: _expired,
-    onInvoices: () => setState(() => _section = 'Invoices'),
+    onInvoices: () => setState(() => _section = 'الفواتير'),
   );
   Widget _account() => SingleChildScrollView(
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Your account', style: Theme.of(context).textTheme.headlineMedium),
+        Text('حسابك', style: Theme.of(context).textTheme.headlineMedium),
         const SizedBox(height: 8),
         const Text(
-          'Your profile and sign-in settings.',
+          'ملفك الشخصي وإعدادات تسجيل الدخول.',
           style: TextStyle(color: muted),
         ),
         const SizedBox(height: 28),
@@ -354,10 +374,24 @@ class _WorkspaceState extends State<Workspace> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (_logoUrl != null && _logoUrl!.isNotEmpty) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    _logoUrl!,
+                    width: 120,
+                    height: 120,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, _, _) =>
+                        const Icon(Icons.broken_image_outlined, size: 48),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
               for (final detail in [
-                ('Name', widget.user.name),
-                ('Email', widget.user.email),
-                ('Role', widget.user.roleLabel),
+                ('الاسم', widget.user.name),
+                ('البريد الإلكتروني', widget.user.email),
+                ('الدور', widget.user.roleLabel),
               ])
                 Padding(
                   padding: const EdgeInsets.only(bottom: 22),
@@ -374,10 +408,53 @@ class _WorkspaceState extends State<Workspace> {
                   ),
                 ),
               const Divider(),
+              if (_tenantId != null) ...[
+                const SizedBox(height: 16),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.image_outlined, size: 18),
+                  label: const Text('تحديث شعار الشركة'),
+                  onPressed: () async {
+                    final file = await openFile(
+                      acceptedTypeGroups: [
+                        XTypeGroup(
+                          label: 'Logo',
+                          extensions: ['png', 'jpg', 'jpeg', 'webp'],
+                        ),
+                      ],
+                    );
+                    if (file == null || !mounted) {
+                      return;
+                    }
+                    try {
+                      final uploaded = await widget.api.uploadTenantLogo(
+                        _tenantId!,
+                        file.path,
+                      );
+                      if (mounted) {
+                        setState(() => _logoUrl = uploaded['url'] as String?);
+                      }
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('تم تحديث شعار الشركة.'),
+                          ),
+                        );
+                      }
+                    } on ApiException catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(SnackBar(content: Text(e.message)));
+                      }
+                    }
+                  },
+                ),
+                const SizedBox(height: 8),
+              ],
               const SizedBox(height: 16),
               FilledButton.icon(
                 icon: const Icon(Icons.lock_outline, size: 18),
-                label: const Text('Change password'),
+                label: const Text('تغيير كلمة المرور'),
                 onPressed: () async {
                   final changed = await showDialog<bool>(
                     context: context,
@@ -386,7 +463,7 @@ class _WorkspaceState extends State<Workspace> {
                   );
                   if (changed == true && mounted) {
                     widget.onSignedOut(
-                      'Password changed. Sign in with your new password.',
+                      'تم تغيير كلمة المرور. سجّل دخولك بكلمتك الجديدة.',
                     );
                   }
                 },
@@ -460,7 +537,7 @@ class _PasswordDialogState extends State<PasswordDialog> {
   Widget build(BuildContext context) => PopScope(
     canPop: !_busy,
     child: AlertDialog(
-      title: const Text('Change password'),
+      title: const Text('تغيير كلمة المرور'),
       content: SizedBox(
         width: 400,
         child: SingleChildScrollView(
@@ -469,9 +546,7 @@ class _PasswordDialogState extends State<PasswordDialog> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
-                  'You will be signed out after changing your password.',
-                ),
+                const Text('سيتم تسجيل خروجك بعد تغيير كلمة المرور.'),
                 const SizedBox(height: 20),
                 if (_error != null) ...[
                   ErrorNotice(_error!),
@@ -482,10 +557,10 @@ class _PasswordDialogState extends State<PasswordDialog> {
                   obscureText: true,
                   enabled: !_busy,
                   decoration: const InputDecoration(
-                    labelText: 'Current password',
+                    labelText: 'كلمة المرور الحالية',
                   ),
                   validator: (v) => v == null || v.isEmpty
-                      ? 'Enter your current password.'
+                      ? 'أدخل كلمة مرورك الحالية.'
                       : null,
                 ),
                 const SizedBox(height: 16),
@@ -493,11 +568,13 @@ class _PasswordDialogState extends State<PasswordDialog> {
                   controller: _next,
                   obscureText: true,
                   enabled: !_busy,
-                  decoration: const InputDecoration(labelText: 'New password'),
+                  decoration: const InputDecoration(
+                    labelText: 'كلمة المرور الجديدة',
+                  ),
                   validator: (v) =>
                       utf8.encode(v ?? '').length < 12 ||
                           utf8.encode(v ?? '').length > 72
-                      ? 'Use a password of 12–72 bytes.'
+                      ? 'استخدم كلمة مرور من 12 إلى 72 حرفاً.'
                       : null,
                 ),
                 const SizedBox(height: 16),
@@ -506,10 +583,10 @@ class _PasswordDialogState extends State<PasswordDialog> {
                   obscureText: true,
                   enabled: !_busy,
                   decoration: const InputDecoration(
-                    labelText: 'Confirm new password',
+                    labelText: 'تأكيد كلمة المرور الجديدة',
                   ),
                   validator: (v) =>
-                      v != _next.text ? 'Passwords do not match.' : null,
+                      v != _next.text ? 'كلمتا المرور غير متطابقتين.' : null,
                   onFieldSubmitted: (_) => _save(),
                 ),
               ],
@@ -520,11 +597,11 @@ class _PasswordDialogState extends State<PasswordDialog> {
       actions: [
         TextButton(
           onPressed: _busy ? null : () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: const Text('إلغاء'),
         ),
         FilledButton(
           onPressed: _busy ? null : _save,
-          child: Text(_busy ? 'Saving…' : 'Save password'),
+          child: Text(_busy ? 'جارٍ الحفظ…' : 'حفظ كلمة المرور'),
         ),
       ],
     ),

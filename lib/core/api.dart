@@ -15,10 +15,12 @@ class AppUser {
     required this.email,
     required this.role,
     this.tenantId,
+    this.logoUrl,
   });
   final int id;
   final String name, email, role;
   final int? tenantId;
+  final String? logoUrl;
   bool get isSuperAdmin => role == 'super_admin';
   String get roleLabel => switch (role) {
     'super_admin' => 'Super admin',
@@ -37,6 +39,7 @@ class AppUser {
       email: json['email'] as String,
       role: role,
       tenantId: json['tenant_id'] as int?,
+      logoUrl: json['logo_url'] as String?,
     );
   }
 }
@@ -49,10 +52,19 @@ abstract class MuskyApi {
     Map<String, dynamic>? body,
   ]);
   Future<AppUser> login(String email, String password);
+  Future<AppUser> currentUser();
   Future<void> logout();
   Future<void> changePassword(String current, String next);
   Future<List<Map<String, dynamic>>> list(String path, {int offset = 0});
   Future<void> saveClient(int tenantId, Map<String, dynamic> data, {int? id});
+  Future<Map<String, dynamic>> createTenant(
+    String name,
+    String traderName,
+    String traderEmail,
+    String traderPassword,
+  );
+  Future<Map<String, dynamic>> uploadTenantLogo(int tenantId, String path);
+  Future<void> deleteTenantLogo(int tenantId);
   void clearSession();
   void dispose();
 }
@@ -74,6 +86,7 @@ class HttpMuskyApi implements MuskyApi {
   }
   final Uri _base;
   String? _token;
+  HttpClient? _uploadClient;
   @override
   String get address => _base.toString();
 
@@ -188,6 +201,16 @@ class HttpMuskyApi implements MuskyApi {
   }
 
   @override
+  Future<AppUser> currentUser() async {
+    final data = await _request('GET', 'me');
+    try {
+      return AppUser.fromJson(data);
+    } catch (_) {
+      throw const ApiException('Unexpected account response.');
+    }
+  }
+
+  @override
   Future<void> changePassword(String current, String next) async {
     await _request('PUT', 'me/password', {
       'current_password': current,
@@ -217,6 +240,97 @@ class HttpMuskyApi implements MuskyApi {
       'tenants/$tenantId/clients${id == null ? '' : '/$id'}',
       data,
     );
+  }
+
+  @override
+  Future<Map<String, dynamic>> createTenant(
+    String name,
+    String traderName,
+    String traderEmail,
+    String traderPassword,
+  ) => _request('POST', 'tenants', {
+    'name': name,
+    'trader': {
+      'name': traderName,
+      'email': traderEmail,
+      'password': traderPassword,
+      'role': 'trader',
+    },
+  });
+
+  @override
+  Future<Map<String, dynamic>> uploadTenantLogo(
+    int tenantId,
+    String path,
+  ) async {
+    final file = File(path);
+    final bytes = await file.readAsBytes();
+    final name = path.split(RegExp(r'[\\/]')).last;
+    final extension = name.toLowerCase().split('.').last;
+    final contentType = switch (extension) {
+      'jpg' || 'jpeg' => 'image/jpeg',
+      'webp' => 'image/webp',
+      _ => 'image/png',
+    };
+    final boundary = 'musky-${DateTime.now().microsecondsSinceEpoch}';
+    final request = await _openMultipart(
+      'POST',
+      'tenants/$tenantId/logo',
+      boundary,
+    );
+    request.headers.contentType = ContentType(
+      'multipart',
+      'form-data',
+      parameters: {'boundary': boundary},
+    );
+    request.write(
+      '--$boundary\r\nContent-Disposition: form-data; name="file"; filename="${name.replaceAll('"', '')}"\r\nContent-Type: $contentType\r\n\r\n',
+    );
+    request.add(bytes);
+    request.write('\r\n--$boundary--\r\n');
+    return _finish(request);
+  }
+
+  Future<HttpClientRequest> _openMultipart(
+    String method,
+    String path,
+    String boundary,
+  ) async {
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
+    final request = await client.openUrl(
+      method,
+      Uri.parse('${address.replaceAll(RegExp(r'/+$'), '')}/$path'),
+    );
+    request.followRedirects = false;
+    if (_token != null) request.headers.set('Authorization', 'Bearer $_token');
+    request.headers.set(
+      'Content-Type',
+      'multipart/form-data; boundary=$boundary',
+    );
+    _uploadClient = client;
+    return request;
+  }
+
+  Future<Map<String, dynamic>> _finish(HttpClientRequest request) async {
+    final response = await request.close().timeout(const Duration(seconds: 30));
+    final text = await response.transform(utf8.decoder).join();
+    _uploadClient?.close(force: true);
+    _uploadClient = null;
+    final data = text.isEmpty
+        ? <String, dynamic>{}
+        : jsonDecode(text) as Map<String, dynamic>;
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(
+        data['error'] as String? ?? 'The upload could not be completed.',
+        response.statusCode,
+      );
+    }
+    return data;
+  }
+
+  @override
+  Future<void> deleteTenantLogo(int tenantId) async {
+    await _request('DELETE', 'tenants/$tenantId/logo');
   }
 
   @override

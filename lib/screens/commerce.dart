@@ -56,7 +56,7 @@ class _CommerceScreenState extends State<CommerceScreen> {
       setState(
         () => _error = error is ApiException
             ? error.message
-            : 'The operation could not be completed. Please retry.',
+            : 'تعذّر إتمام العملية. حاول مجدداً.',
       );
     }
   }
@@ -170,14 +170,14 @@ class _CommerceScreenState extends State<CommerceScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.products ? 'Products' : 'Invoices',
+                  widget.products ? 'المنتجات' : 'الفواتير',
                   style: Theme.of(context).textTheme.headlineMedium,
                 ),
                 const SizedBox(height: 8),
                 Text(
                   widget.products
-                      ? 'Stock in packs. Prices in EGP per pack.'
-                      : 'Draft, review and post your sales invoices.',
+                      ? 'المخزون بالحزم. الأسعار بالجنيه المصري للحزمة.'
+                      : 'أنشئ وراجع وأصدر فواتير المبيعات.',
                   style: const TextStyle(color: muted),
                 ),
               ],
@@ -191,7 +191,7 @@ class _CommerceScreenState extends State<CommerceScreen> {
                 ? () => _product()
                 : _newInvoice,
             icon: const Icon(Icons.add, size: 18),
-            label: Text(widget.products ? 'Add product' : 'New invoice'),
+            label: Text(widget.products ? 'إضافة منتج' : 'فاتورة جديدة'),
           ),
         ],
       ),
@@ -203,7 +203,7 @@ class _CommerceScreenState extends State<CommerceScreen> {
                 ? TextField(
                     controller: _search,
                     decoration: const InputDecoration(
-                      hintText: 'Search products by title or code',
+                      hintText: 'بحث بالاسم أو الكود',
                       prefixIcon: Icon(Icons.search),
                     ),
                     onChanged: (_) {
@@ -217,7 +217,7 @@ class _CommerceScreenState extends State<CommerceScreen> {
                 : DropdownButtonFormField<String>(
                     initialValue: _status,
                     decoration: const InputDecoration(
-                      labelText: 'Invoice status',
+                      labelText: 'حالة الفاتورة',
                     ),
                     items: [
                       for (final status in [
@@ -229,7 +229,9 @@ class _CommerceScreenState extends State<CommerceScreen> {
                       ])
                         DropdownMenuItem(
                           value: status,
-                          child: Text(status.isEmpty ? 'All invoices' : status),
+                          child: Text(
+                            status.isEmpty ? 'جميع الفواتير' : status,
+                          ),
                         ),
                     ],
                     onChanged: _busy
@@ -243,7 +245,7 @@ class _CommerceScreenState extends State<CommerceScreen> {
           ),
           const SizedBox(width: 12),
           IconButton(
-            tooltip: 'Refresh',
+            tooltip: 'تحديث',
             onPressed: _busy ? null : _load,
             icon: const Icon(Icons.refresh),
           ),
@@ -271,7 +273,7 @@ class _CommerceScreenState extends State<CommerceScreen> {
                         const SizedBox(height: 16),
                         OutlinedButton(
                           onPressed: _load,
-                          child: const Text('Retry'),
+                          child: const Text('إعادة المحاولة'),
                         ),
                       ],
                     ),
@@ -281,8 +283,8 @@ class _CommerceScreenState extends State<CommerceScreen> {
               ? Center(
                   child: Text(
                     widget.products
-                        ? 'No products found. Add a product to get started.'
-                        : 'No invoices found. Create a draft to get started.',
+                        ? 'لا توجد منتجات. أضف منتجاً للبدء.'
+                        : 'لا توجد فواتير. أنشئ مسودة للبدء.',
                     style: const TextStyle(color: muted),
                   ),
                 )
@@ -308,21 +310,21 @@ class _CommerceScreenState extends State<CommerceScreen> {
                               for (final title
                                   in widget.products
                                       ? [
-                                          'Product',
-                                          'Code',
-                                          'Packs',
-                                          'Pieces / pack',
-                                          'Price / pack',
-                                          'Status',
-                                          'Actions',
+                                          'المنتج',
+                                          'الكود',
+                                          'الحزم',
+                                          'القطع / الحزمة',
+                                          'السعر / الحزمة',
+                                          'الحالة',
+                                          'الإجراءات',
                                         ]
                                       : [
-                                          'Invoice',
-                                          'Client',
-                                          'Date',
-                                          'Total',
-                                          'Status',
-                                          'Actions',
+                                          'الفاتورة',
+                                          'العميل',
+                                          'التاريخ',
+                                          'الإجمالي',
+                                          'الحالة',
+                                          'الإجراءات',
                                         ])
                                 DataColumn(label: Text(title)),
                             ],
@@ -360,8 +362,8 @@ class _CommerceScreenState extends State<CommerceScreen> {
                                             DataCell(
                                               Text(
                                                 row['active'] == true
-                                                    ? 'Active'
-                                                    : 'Archived',
+                                                    ? 'نشط'
+                                                    : 'مؤرشف',
                                               ),
                                             ),
                                             DataCell(
@@ -370,7 +372,7 @@ class _CommerceScreenState extends State<CommerceScreen> {
                                                 children: [
                                                   IconButton(
                                                     tooltip:
-                                                        'Edit ${row['title']}',
+                                                        'تعديل ${row['title']}',
                                                     onPressed: () =>
                                                         _product(row),
                                                     icon: const Icon(
@@ -381,8 +383,8 @@ class _CommerceScreenState extends State<CommerceScreen> {
                                                   IconButton(
                                                     tooltip:
                                                         row['active'] == true
-                                                        ? 'Archive ${row['title']}'
-                                                        : 'Restore ${row['title']}',
+                                                        ? 'أرشفة ${row['title']}'
+                                                        : 'استعادة ${row['title']}',
                                                     onPressed: () =>
                                                         _toggle(row),
                                                     icon: Icon(
@@ -425,7 +427,7 @@ class _CommerceScreenState extends State<CommerceScreen> {
                                                   row['id'] as int,
                                                 ),
                                                 child: const Text(
-                                                  'Open invoice',
+                                                  'فتح الفاتورة',
                                                 ),
                                               ),
                                             ),
@@ -446,12 +448,12 @@ class _CommerceScreenState extends State<CommerceScreen> {
         children: [
           Expanded(
             child: Text(
-              'Page ${_offset ~/ 50 + 1} · ${_rows.length} records',
+              'صفحة ${_offset ~/ 50 + 1} · ${_rows.length} سجل',
               style: const TextStyle(color: muted),
             ),
           ),
           IconButton(
-            tooltip: 'Previous page',
+            tooltip: 'الصفحة السابقة',
             onPressed: _busy || _offset == 0
                 ? null
                 : () {
@@ -461,7 +463,7 @@ class _CommerceScreenState extends State<CommerceScreen> {
             icon: const Icon(Icons.chevron_left),
           ),
           IconButton(
-            tooltip: 'Next page',
+            tooltip: 'الصفحة التالية',
             onPressed: _busy || _rows.length < 50
                 ? null
                 : () {
@@ -555,7 +557,7 @@ class _ProductDialogState extends State<ProductDialog> {
       }
     } catch (_) {
       if (mounted) {
-        setState(() => _error = 'Unable to save the product. Try again.');
+        setState(() => _error = 'تعذّر حفظ المنتج. حاول مجدداً.');
       }
     } finally {
       if (mounted) {
@@ -568,7 +570,7 @@ class _ProductDialogState extends State<ProductDialog> {
   Widget build(BuildContext context) => PopScope(
     canPop: !_busy,
     child: AlertDialog(
-      title: Text(widget.product == null ? 'Add product' : 'Edit product'),
+      title: Text(widget.product == null ? 'إضافة منتج' : 'تعديل منتج'),
       content: SizedBox(
         width: 480,
         child: SingleChildScrollView(
@@ -587,11 +589,11 @@ class _ProductDialogState extends State<ProductDialog> {
                   autofocus: true,
                   maxLength: 150,
                   decoration: const InputDecoration(
-                    labelText: 'Product title',
+                    labelText: 'اسم المنتج',
                     counterText: '',
                   ),
                   validator: (v) =>
-                      v == null || v.trim().isEmpty ? 'Enter a title.' : null,
+                      v == null || v.trim().isEmpty ? 'أدخل الاسم.' : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
@@ -599,16 +601,16 @@ class _ProductDialogState extends State<ProductDialog> {
                   enabled: !_busy,
                   maxLength: 80,
                   decoration: const InputDecoration(
-                    labelText: 'Product code',
+                    labelText: 'كود المنتج',
                     counterText: '',
                   ),
                   validator: (v) =>
-                      v == null || v.trim().isEmpty ? 'Enter a code.' : null,
+                      v == null || v.trim().isEmpty ? 'أدخل الكود.' : null,
                 ),
                 const SizedBox(height: 16),
                 for (final entry in [
-                  (_quantity, 'Stock quantity (packs)', 0, 1000000000),
-                  (_pieces, 'Pieces per pack', 1, 1000000),
+                  (_quantity, 'الكمية (حزم)', 0, 1000000000),
+                  (_pieces, 'القطع في الحزمة', 1, 1000000),
                 ]) ...[
                   TextFormField(
                     controller: entry.$1,
@@ -618,7 +620,7 @@ class _ProductDialogState extends State<ProductDialog> {
                     validator: (v) {
                       final n = int.tryParse(v ?? '');
                       return n == null || n < entry.$3 || n > entry.$4
-                          ? 'Enter a whole number from ${entry.$3} to ${entry.$4}.'
+                          ? 'أدخل رقماً صحيحاً من ${entry.$3} إلى ${entry.$4}.'
                           : null;
                     },
                   ),
@@ -631,15 +633,15 @@ class _ProductDialogState extends State<ProductDialog> {
                     decimal: true,
                   ),
                   decoration: const InputDecoration(
-                    labelText: 'Price per pack (EGP)',
+                    labelText: 'السعر للحزمة (ج.م)',
                   ),
                   validator: (v) => parseMoney(v ?? '') == null
-                      ? 'Enter a valid price with up to 2 decimal places.'
+                      ? 'أدخل سعراً صحيحاً بحد أقصى خانتين عشريتين.'
                       : null,
                 ),
                 const SizedBox(height: 14),
                 const Text(
-                  'Changing stock quantity records a stock adjustment.',
+                  'تغيير الكمية يُسجّل حركة مخزون.',
                   style: TextStyle(color: muted, fontSize: 12),
                 ),
               ],
@@ -650,11 +652,11 @@ class _ProductDialogState extends State<ProductDialog> {
       actions: [
         TextButton(
           onPressed: _busy ? null : () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: const Text('إلغاء'),
         ),
         FilledButton(
           onPressed: _busy ? null : _save,
-          child: Text(_busy ? 'Saving…' : 'Save product'),
+          child: Text(_busy ? 'جارٍ الحفظ…' : 'حفظ المنتج'),
         ),
       ],
     ),

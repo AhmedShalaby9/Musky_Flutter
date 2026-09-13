@@ -75,12 +75,12 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     if (!wide) ...[const Brand(), const SizedBox(height: 48)],
                     Text(
-                      'Welcome back',
+                      'مرحباً بعودتك',
                       style: Theme.of(context).textTheme.headlineLarge,
                     ),
                     const SizedBox(height: 10),
                     const Text(
-                      'Sign in to your trading workspace.',
+                      'سجّل دخولك إلى مساحة العمل.',
                       style: TextStyle(color: muted, fontSize: 15),
                     ),
                     const SizedBox(height: 32),
@@ -100,7 +100,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       keyboardType: TextInputType.emailAddress,
                       textInputAction: TextInputAction.next,
                       decoration: const InputDecoration(
-                        labelText: 'Email address',
+                        labelText: 'البريد الإلكتروني',
                         hintText: 'you@example.com',
                         prefixIcon: Icon(Icons.mail_outline),
                       ),
@@ -109,7 +109,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               !RegExp(
                                 r'^[^\s@]+@[^\s@]+\.[^\s@]+$',
                               ).hasMatch(value.trim())
-                          ? 'Enter a valid email address.'
+                          ? 'أدخل بريداً إلكترونياً صحيحاً.'
                           : null,
                     ),
                     const SizedBox(height: 20),
@@ -122,10 +122,12 @@ class _LoginScreenState extends State<LoginScreen> {
                       autofillHints: const [AutofillHints.password],
                       onFieldSubmitted: (_) => _submit(),
                       decoration: InputDecoration(
-                        labelText: 'Password',
+                        labelText: 'كلمة المرور',
                         prefixIcon: const Icon(Icons.lock_outline),
                         suffixIcon: IconButton(
-                          tooltip: _obscure ? 'Show password' : 'Hide password',
+                          tooltip: _obscure
+                              ? 'إظهار كلمة المرور'
+                              : 'إخفاء كلمة المرور',
                           onPressed: () => setState(() => _obscure = !_obscure),
                           icon: Icon(
                             _obscure
@@ -135,7 +137,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       validator: (value) => value == null || value.isEmpty
-                          ? 'Enter your password.'
+                          ? 'أدخل كلمة المرور.'
                           : null,
                     ),
                     const SizedBox(height: 28),
@@ -154,7 +156,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             : const Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Text('Sign in'),
+                                  Text('تسجيل الدخول'),
                                   SizedBox(width: 12),
                                   Icon(Icons.arrow_forward, size: 18),
                                 ],
@@ -163,7 +165,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 24),
                     const Text(
-                      'Need an account or a password reset?\nContact your system administrator.',
+                      'تحتاج إلى حساب أو إعادة تعيين كلمة المرور؟\nتواصل مع مسؤول النظام.',
                       style: TextStyle(color: muted, height: 1.6),
                     ),
                     const SizedBox(height: 48),
@@ -198,7 +200,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       const Brand(light: true),
                       const Spacer(),
                       const Text(
-                        'A clearer view\nof your business.',
+                        'رؤية أوضح\nلعملك.',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 44,
@@ -209,7 +211,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 24),
                       const Text(
-                        'Your clients. Your stock. Your workspace.\nOne place to keep business moving.',
+                        'عملاؤك. مخزونك. مساحة عملك.\nكل شيء في مكان واحد.',
                         style: TextStyle(
                           color: Color(0xFFB6C9C1),
                           fontSize: 16,
@@ -235,7 +237,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             SizedBox(width: 14),
                             Expanded(
                               child: Text(
-                                'A dedicated workspace for every trader.',
+                                'مساحة عمل مخصصة لكل تاجر.',
                                 style: TextStyle(
                                   color: Colors.white,
                                   height: 1.5,
@@ -247,7 +249,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const Spacer(),
                       const Text(
-                        'MUSKY  /  DESKTOP WORKSPACE',
+                        'MUSKY  /  مساحة العمل',
                         style: TextStyle(
                           color: Color(0xFFB6C9C1),
                           fontSize: 11,

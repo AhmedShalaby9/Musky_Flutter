@@ -168,6 +168,9 @@ class FakeApi implements MuskyApi {
   }
 
   @override
+  Future<AppUser> currentUser() async => user;
+
+  @override
   Future<void> logout() async {
     loggedOut = true;
   }
@@ -181,6 +184,20 @@ class FakeApi implements MuskyApi {
   void dispose() {}
   @override
   Future<void> changePassword(String current, String next) async {}
+  @override
+  Future<Map<String, dynamic>> createTenant(
+    String name,
+    String traderName,
+    String traderEmail,
+    String traderPassword,
+  ) async => {'id': 99, 'name': name, 'trader_id': 100};
+  @override
+  Future<Map<String, dynamic>> uploadTenantLogo(
+    int tenantId,
+    String path,
+  ) async => {'url': 'https://example.test/logo.png'};
+  @override
+  Future<void> deleteTenantLogo(int tenantId) async {}
   @override
   Future<List<Map<String, dynamic>>> list(String path, {int offset = 0}) async {
     paths.add(path);
