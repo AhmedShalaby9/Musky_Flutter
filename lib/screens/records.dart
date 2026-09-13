@@ -517,7 +517,10 @@ class _ClientDialogState extends State<ClientDialog> {
     });
     try {
       final data = <String, dynamic>{
-        for (final entry in _fields.entries) entry.key: entry.value.text.trim(),
+        for (final entry in _fields.entries)
+          entry.key: entry.value.text.trim().isEmpty && entry.key != 'name'
+              ? null
+              : entry.value.text.trim(),
       };
       if (widget.user.isSuperAdmin && widget.client == null) {
         // Tenant creation inserts the sole trader first, before supporting admins.
