@@ -176,7 +176,7 @@ class _CommerceScreenState extends State<CommerceScreen> {
                 const SizedBox(height: 8),
                 Text(
                   widget.products
-                      ? 'المخزون بالحزم. الأسعار بالجنيه المصري للحزمة.'
+                      ? 'المخزون بالحزم. الأسعار تُحدَّد في كل فاتورة.'
                       : 'أنشئ وراجع وأصدر فواتير المبيعات.',
                   style: const TextStyle(color: muted),
                 ),
@@ -314,7 +314,6 @@ class _CommerceScreenState extends State<CommerceScreen> {
                                           'الكود',
                                           'الحزم',
                                           'القطع / الحزمة',
-                                          'السعر / الحزمة',
                                           'الحالة',
                                           'الإجراءات',
                                         ]
@@ -350,14 +349,6 @@ class _CommerceScreenState extends State<CommerceScreen> {
                                             ),
                                             DataCell(
                                               Text('${row['pieces_per_unit']}'),
-                                            ),
-                                            DataCell(
-                                              Text(
-                                                egp(
-                                                  row['unit_price_minor']
-                                                      as int,
-                                                ),
-                                              ),
                                             ),
                                             DataCell(
                                               Text(
@@ -508,14 +499,11 @@ class _ProductDialogState extends State<ProductDialog> {
   late final _pieces = TextEditingController(
     text: '${widget.product?['pieces_per_unit'] ?? 1}',
   );
-  late final _price = TextEditingController(
-    text: moneyInput(widget.product?['unit_price_minor'] as int? ?? 0),
-  );
   bool _busy = false;
   String? _error;
   @override
   void dispose() {
-    for (final c in [_title, _code, _quantity, _pieces, _price]) {
+    for (final c in [_title, _code, _quantity, _pieces]) {
       c.dispose();
     }
     super.dispose();
@@ -539,7 +527,6 @@ class _ProductDialogState extends State<ProductDialog> {
           'code': _code.text.trim(),
           'quantity': int.parse(_quantity.text),
           'pieces_per_unit': int.parse(_pieces.text),
-          'unit_price_minor': parseMoney(_price.text)!,
           if (id != null) 'version': widget.product!['version'],
         },
       );
@@ -626,20 +613,6 @@ class _ProductDialogState extends State<ProductDialog> {
                   ),
                   const SizedBox(height: 16),
                 ],
-                TextFormField(
-                  controller: _price,
-                  enabled: !_busy,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: const InputDecoration(
-                    labelText: 'السعر للحزمة (ج.م)',
-                  ),
-                  validator: (v) => parseMoney(v ?? '') == null
-                      ? 'أدخل سعراً صحيحاً بحد أقصى خانتين عشريتين.'
-                      : null,
-                ),
-                const SizedBox(height: 14),
                 const Text(
                   'تغيير الكمية يُسجّل حركة مخزون.',
                   style: TextStyle(color: muted, fontSize: 12),

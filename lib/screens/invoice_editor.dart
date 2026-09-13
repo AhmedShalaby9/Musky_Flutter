@@ -137,7 +137,7 @@ class _RecordPickerState extends State<RecordPicker> {
                         ),
                         subtitle: Text(
                           widget.products
-                              ? '${row['code']} · ${row['quantity']} حزمة متاحة · ${egp(row['unit_price_minor'] as int)} / الحزمة'
+                              ? '${row['code']} · ${row['quantity']} حزمة متاحة'
                               : '${row['phone'] ?? ''}',
                         ),
                         onTap: () => Navigator.pop(context, row),
@@ -302,7 +302,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
               row['title'] as String,
               row['pieces_per_unit'] as int,
               1,
-              row['unit_price_minor'] as int,
+              0,
             ),
           );
         } else {
