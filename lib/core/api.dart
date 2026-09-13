@@ -57,6 +57,13 @@ abstract class MuskyApi {
   Future<void> changePassword(String current, String next);
   Future<List<Map<String, dynamic>>> list(String path, {int offset = 0});
   Future<void> saveClient(int tenantId, Map<String, dynamic> data, {int? id});
+  Future<Map<String, dynamic>> recordPayment(
+    int tenantId,
+    int invoiceId,
+    int amountMinor,
+    String method,
+    String notes,
+  );
   Future<Map<String, dynamic>> createTenant(
     String name,
     String traderName,
@@ -241,6 +248,19 @@ class HttpMuskyApi implements MuskyApi {
       data,
     );
   }
+
+  @override
+  Future<Map<String, dynamic>> recordPayment(
+    int tenantId,
+    int invoiceId,
+    int amountMinor,
+    String method,
+    String notes,
+  ) => _request('POST', 'tenants/$tenantId/invoices/$invoiceId/payments', {
+    'amount_minor': amountMinor,
+    'method': method,
+    'notes': notes,
+  });
 
   @override
   Future<Map<String, dynamic>> createTenant(

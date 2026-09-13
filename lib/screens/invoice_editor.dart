@@ -714,6 +714,36 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
     }
   }
 
+  Future<void> _payment() async {
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => PaymentDialog(
+        remainingMinor:
+            (_invoice!['remaining_minor'] as int?) ??
+            (_invoice!['total_minor'] as int),
+      ),
+    );
+    if (result == null || !mounted) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await widget.api.recordPayment(
+        widget.tenantId,
+        widget.invoiceId,
+        result['amount_minor'] as int,
+        result['method'] as String,
+        result['notes'] as String,
+      );
+      await _load();
+    } catch (e) {
+      _handle(e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) => PopScope(
     canPop: !_busy,
@@ -794,6 +824,15 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
                           style: Theme.of(context).textTheme.titleLarge,
                         ),
                       ),
+                      if (_invoice!['status'] == 'posted') ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'المدفوع: ${egp((_invoice!['paid_minor'] as int?) ?? 0)}',
+                        ),
+                        Text(
+                          'المتبقي: ${egp((_invoice!['remaining_minor'] as int?) ?? (_invoice!['total_minor'] as int))}',
+                        ),
+                      ],
                       if ('${_invoice!['notes']}'.isNotEmpty) ...[
                         const SizedBox(height: 20),
                         Text('ملاحظات: ${_invoice!['notes']}'),
@@ -826,6 +865,12 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
             child: const Text('إصدار الفاتورة'),
           ),
         ],
+        if (_invoice?['status'] == 'posted' &&
+            ((_invoice?['remaining_minor'] as int?) ?? 0) > 0)
+          FilledButton(
+            onPressed: _busy ? null : _payment,
+            child: const Text('تسجيل دفعة'),
+          ),
         if (_invoice?['status'] == 'posted')
           OutlinedButton(
             onPressed: _busy ? null : () => _transition('void'),
@@ -833,6 +878,88 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
           ),
       ],
     ),
+  );
+}
+
+class PaymentDialog extends StatefulWidget {
+  const PaymentDialog({super.key, required this.remainingMinor});
+  final int remainingMinor;
+  @override
+  State<PaymentDialog> createState() => _PaymentDialogState();
+}
+
+class _PaymentDialogState extends State<PaymentDialog> {
+  final _form = GlobalKey<FormState>();
+  final _amount = TextEditingController();
+  final _notes = TextEditingController();
+  String _method = 'cash';
+  @override
+  void dispose() {
+    _amount.dispose();
+    _notes.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('تسجيل دفعة'),
+    content: Form(
+      key: _form,
+      child: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('المتبقي: ${egp(widget.remainingMinor)}'),
+            TextFormField(
+              controller: _amount,
+              autofocus: true,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(labelText: 'المبلغ بالجنيه'),
+              validator: (v) {
+                final n = v == null ? null : parseMoney(v);
+                if (n == null || n < 1 || n > widget.remainingMinor)
+                  return 'أدخل مبلغاً صحيحاً ضمن المتبقي.';
+                return null;
+              },
+            ),
+            DropdownButtonFormField<String>(
+              value: _method,
+              decoration: const InputDecoration(labelText: 'طريقة الدفع'),
+              items: const [
+                DropdownMenuItem(value: 'cash', child: Text('نقدي')),
+                DropdownMenuItem(value: 'online', child: Text('إلكتروني')),
+              ],
+              onChanged: (v) => setState(() => _method = v ?? 'cash'),
+            ),
+            TextFormField(
+              controller: _notes,
+              maxLength: 500,
+              decoration: const InputDecoration(labelText: 'ملاحظات (اختياري)'),
+            ),
+          ],
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('إلغاء'),
+      ),
+      FilledButton(
+        onPressed: () {
+          if (_form.currentState!.validate())
+            Navigator.pop(context, {
+              'amount_minor': parseMoney(_amount.text)!,
+              'method': _method,
+              'notes': _notes.text.trim(),
+            });
+        },
+        child: const Text('حفظ الدفعة'),
+      ),
+    ],
   );
 }
 

@@ -185,6 +185,14 @@ class FakeApi implements MuskyApi {
   @override
   Future<void> changePassword(String current, String next) async {}
   @override
+  Future<Map<String, dynamic>> recordPayment(
+    int tenantId,
+    int invoiceId,
+    int amountMinor,
+    String method,
+    String notes,
+  ) async => {};
+  @override
   Future<Map<String, dynamic>> createTenant(
     String name,
     String traderName,
