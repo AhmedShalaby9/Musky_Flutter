@@ -45,7 +45,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } on ApiException catch (e) {
       if (mounted) {
-        setState(() => _error = e.message);
+        setState(() => _error = e.status != null ? '${e.message} [${e.status}]' : e.message);
       }
     } catch (_) {
       if (mounted) {
