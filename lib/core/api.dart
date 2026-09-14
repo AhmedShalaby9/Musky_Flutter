@@ -55,7 +55,7 @@ abstract class MuskyApi {
   Future<AppUser> currentUser();
   Future<void> logout();
   Future<void> changePassword(String current, String next);
-  Future<List<Map<String, dynamic>>> list(String path, {int offset = 0});
+  Future<List<Map<String, dynamic>>> list(String path, {int offset = 0, String q = ''});
   Future<void> saveClient(int tenantId, Map<String, dynamic> data, {int? id});
   Future<Map<String, dynamic>> recordPayment(
     int tenantId,
@@ -227,8 +227,10 @@ class HttpMuskyApi implements MuskyApi {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> list(String path, {int offset = 0}) async {
-    final data = await _request('GET', '$path?limit=50&offset=$offset');
+  Future<List<Map<String, dynamic>>> list(String path, {int offset = 0, String q = ''}) async {
+    var url = '$path?limit=50&offset=$offset';
+    if (q.isNotEmpty) url += '&q=${Uri.encodeQueryComponent(q)}';
+    final data = await _request('GET', url);
     try {
       return (data['data'] as List).cast<Map<String, dynamic>>();
     } catch (_) {

@@ -62,3 +62,18 @@ Create a product and a client, then open Invoices, create a draft, select the cl
 Version conflicts mean another operation changed the record: close the editor, refresh the list and reopen it before saving. If saving a new draft times out, refresh the invoice list before creating another one to avoid duplicate drafts. Products and invoice/client pickers use server-side search with pagination. Invoice lists can be filtered by status.
 
 The dashboard explicitly reports that only posted sales invoices and voids are included; payments and opening balances will be added separately. Widget previews include `products.png`, `invoice-editor.png` and `invoice-detail.png` using test-only sample data.
+
+
+
+## how to build the app:
+
+  flutter build windows --release
+
+  if (Test-Path musky-client-windows.zip) {
+      Remove-Item musky-client-windows.zip -Force
+  }
+
+  Compress-Archive `
+    -Path build\windows\x64\runner\Release\* `
+    -DestinationPath musky-client-windows.zip `
+    -CompressionLevel Optimal

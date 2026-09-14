@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:file_selector/file_selector.dart';
 import '../core/api.dart';
@@ -28,6 +30,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
   List<Map<String, dynamic>> _rows = [];
   final _search = TextEditingController();
   final _horizontal = ScrollController();
+  Timer? _searchTimer;
   bool _loading = true;
   String? _error;
   int _offset = 0, _requestId = 0;
@@ -41,6 +44,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
 
   @override
   void dispose() {
+    _searchTimer?.cancel();
     _search.dispose();
     _horizontal.dispose();
     super.dispose();
@@ -56,7 +60,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
       final path = _businesses
           ? 'tenants'
           : 'tenants/${widget.tenantId}/${_clients ? 'clients' : 'users'}';
-      final rows = await widget.api.list(path, offset: _offset);
+      final rows = await widget.api.list(path, offset: _offset, q: _clients ? _search.text.trim() : '');
       if (mounted && requestId == _requestId) {
         setState(() => _rows = rows);
       }
@@ -183,16 +187,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final query = _search.text.toLowerCase().trim();
-    final rows = _rows
-        .where(
-          (row) => [
-            'name',
-            'phone',
-            'id',
-          ].any((key) => '${row[key] ?? ''}'.toLowerCase().contains(query)),
-        )
-        .toList();
+    final rows = _rows;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -238,9 +233,15 @@ class _RecordsScreenState extends State<RecordsScreen> {
             Expanded(
               child: TextField(
                 controller: _search,
-                onChanged: (_) => setState(() {}),
+                onChanged: (_) {
+                  _searchTimer?.cancel();
+                  _searchTimer = Timer(const Duration(milliseconds: 400), () {
+                    _offset = 0;
+                    _load();
+                  });
+                },
                 decoration: const InputDecoration(
-                  hintText: 'بحث في هذه الصفحة',
+                  hintText: 'بحث في جميع السجلات',
                   prefixIcon: Icon(Icons.search),
                   contentPadding: EdgeInsets.symmetric(
                     horizontal: 14,
@@ -300,8 +301,8 @@ class _RecordsScreenState extends State<RecordsScreen> {
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            query.isNotEmpty
-                                ? 'لا توجد سجلات مطابقة في هذه الصفحة'
+                            _search.text.trim().isNotEmpty
+                                ? 'لا توجد سجلات مطابقة'
                                 : 'لا توجد سجلات في هذه الصفحة',
                             style: const TextStyle(
                               fontSize: 18,
@@ -310,7 +311,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            query.isNotEmpty
+                            _search.text.trim().isNotEmpty
                                 ? 'جرّب بحثاً آخر أو امسح حقل البحث.'
                                 : _clients
                                 ? 'أضف أول عميل لتنظيم جهات الاتصال.'
@@ -510,7 +511,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
           children: [
             Expanded(
               child: Text(
-                'صفحة ${_offset ~/ 50 + 1} · ${_rows.length} سجل${query.isEmpty ? '' : ' · ${rows.length} مطابق'}',
+                'صفحة ${_offset ~/ 50 + 1} · ${_rows.length} سجل',
                 style: const TextStyle(color: muted, fontSize: 12),
               ),
             ),
