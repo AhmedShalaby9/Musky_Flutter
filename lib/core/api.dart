@@ -112,13 +112,14 @@ class HttpMuskyApi implements MuskyApi {
     String path, [
     Map<String, dynamic>? body,
   ]) async {
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 8)
+      ..findProxy = (uri) => 'DIRECT';
     try {
       return await (() async {
-        final request = await client.openUrl(
-          method,
-          Uri.parse('${address.replaceAll(RegExp(r'/+$'), '')}/$path'),
-        );
+        final url = Uri.parse('${address.replaceAll(RegExp(r'/+$'), '')}/$path');
+        print('[HTTP] --> $method $url');
+        final request = await client.openUrl(method, url);
         request.followRedirects = false;
         request.headers.contentType = ContentType.json;
         if (_token != null) {
@@ -128,6 +129,8 @@ class HttpMuskyApi implements MuskyApi {
           request.write(jsonEncode(body));
         }
         final response = await request.close();
+        print('[HTTP] <-- ${response.statusCode} $method $url');
+        print('[HTTP]     headers: ${response.headers}');
         final bytes = <int>[];
         await for (final chunk in response) {
           bytes.addAll(chunk);
@@ -135,9 +138,11 @@ class HttpMuskyApi implements MuskyApi {
             throw const ApiException('The server response is too large.');
           }
         }
+        final bodyText = bytes.isNotEmpty ? utf8.decode(bytes) : '(empty)';
+        print('[HTTP]     body: $bodyText');
         Map<String, dynamic> data = {};
         if (bytes.isNotEmpty) {
-          final decoded = jsonDecode(utf8.decode(bytes));
+          final decoded = jsonDecode(bodyText);
           if (decoded is! Map<String, dynamic>) {
             throw const FormatException();
           }
@@ -154,23 +159,28 @@ class HttpMuskyApi implements MuskyApi {
         }
         return data;
       })().timeout(const Duration(seconds: 15));
-    } on TimeoutException {
+    } on TimeoutException catch (e, st) {
+      print('[HTTP] TimeoutException: $e\n$st');
       throw const ApiException(
         'The connection timed out. Check your server and try again.',
       );
-    } on SocketException {
+    } on SocketException catch (e, st) {
+      print('[HTTP] SocketException: $e\n$st');
       throw const ApiException(
         'Cannot connect to Musky. Check that your server is running.',
       );
-    } on HandshakeException {
+    } on HandshakeException catch (e, st) {
+      print('[HTTP] HandshakeException: $e\n$st');
       throw const ApiException(
         'The server security certificate could not be verified.',
       );
-    } on HttpException {
+    } on HttpException catch (e, st) {
+      print('[HTTP] HttpException: $e\n$st');
       throw const ApiException(
         'The connection was interrupted. Please try again.',
       );
-    } on FormatException {
+    } on FormatException catch (e, st) {
+      print('[HTTP] FormatException: $e\n$st');
       throw const ApiException(
         'Unexpected server response. Check the API address.',
       );
@@ -321,7 +331,9 @@ class HttpMuskyApi implements MuskyApi {
     String path,
     String boundary,
   ) async {
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 8)
+      ..findProxy = (uri) => 'DIRECT';
     final request = await client.openUrl(
       method,
       Uri.parse('${address.replaceAll(RegExp(r'/+$'), '')}/$path'),

@@ -43,13 +43,17 @@ class _LoginScreenState extends State<LoginScreen> {
         _password.clear();
         widget.onLogin(user);
       }
-    } on ApiException catch (e) {
+    } on ApiException catch (e, st) {
+      print('[LOGIN] ApiException status=${e.status} message=${e.message}');
+      print('[LOGIN] stack: $st');
       if (mounted) {
         setState(() => _error = e.status != null ? '${e.message} [${e.status}]' : e.message);
       }
-    } catch (_) {
+    } catch (e, st) {
+      print('[LOGIN] unexpected error: $e');
+      print('[LOGIN] stack: $st');
       if (mounted) {
-        setState(() => _error = 'Unable to sign in. Please try again.');
+        setState(() => _error = 'Unable to sign in. Please try again. ($e)');
       }
     } finally {
       if (mounted) {
