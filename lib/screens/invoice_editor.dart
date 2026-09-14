@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../core/api.dart';
 import '../core/money.dart';
 import '../core/theme.dart';
@@ -750,18 +751,21 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
       _error = null;
     });
     try {
-      final data = await widget.api.request('POST', '$_path/pdf');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('تم إنشاء ملف الفاتورة ورفعه: ${data['url'] ?? ''}'),
-          ),
-        );
-      }
+      await widget.api.request('POST', '$_path/pdf');
+      await _load();
     } catch (e) {
       _handle(e);
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _openPdf() async {
+    final url = '${_invoice?['pdf_url']}';
+    if (url.isEmpty) return;
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }
 
@@ -868,10 +872,18 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
               ),
       ),
       actions: [
+        if (_invoice != null && '${_invoice!['pdf_url']}'.isNotEmpty)
+          OutlinedButton.icon(
+            onPressed: _busy ? null : _openPdf,
+            icon: const Icon(Icons.open_in_new),
+            label: const Text('عرض PDF'),
+          ),
         OutlinedButton.icon(
           onPressed: _busy || _invoice == null ? null : _generatePdf,
           icon: const Icon(Icons.picture_as_pdf_outlined),
-          label: const Text('إنشاء PDF'),
+          label: Text(_invoice != null && '${_invoice!['pdf_url']}'.isNotEmpty
+              ? 'تحديث PDF'
+              : 'إنشاء PDF'),
         ),
         TextButton(
           onPressed: _busy ? null : () => Navigator.pop(context),

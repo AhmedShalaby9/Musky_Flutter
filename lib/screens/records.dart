@@ -5,6 +5,7 @@ import 'package:file_selector/file_selector.dart';
 import '../core/api.dart';
 import '../core/money.dart';
 import '../core/theme.dart';
+import 'client_detail.dart';
 
 class RecordsScreen extends StatefulWidget {
   const RecordsScreen({
@@ -369,14 +370,44 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                         DataCell(
                                           SizedBox(
                                             width: 180,
-                                            child: Text(
-                                              '${row['name']}',
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                            ),
+                                            child: _clients
+                                                ? TextButton(
+                                                    style: TextButton.styleFrom(
+                                                      padding: EdgeInsets.zero,
+                                                      alignment: AlignmentDirectional.centerStart,
+                                                    ),
+                                                    onPressed: () async {
+                                                      await Navigator.push(
+                                                        context,
+                                                        MaterialPageRoute(
+                                                          builder: (_) => ClientDetailScreen(
+                                                            api: widget.api,
+                                                            tenantId: widget.tenantId!,
+                                                            clientId: row['id'] as int,
+                                                            clientName: '${row['name']}',
+                                                            onExpired: widget.onExpired,
+                                                          ),
+                                                        ),
+                                                      );
+                                                      if (mounted) _load();
+                                                    },
+                                                    child: Text(
+                                                      '${row['name']}',
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
+                                                      style: const TextStyle(
+                                                        fontWeight: FontWeight.w500,
+                                                      ),
+                                                    ),
+                                                  )
+                                                : Text(
+                                                    '${row['name']}',
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                    style: const TextStyle(
+                                                      fontWeight: FontWeight.w500,
+                                                    ),
+                                                  ),
                                           ),
                                         ),
                                         if (!_clients && !_businesses)
@@ -447,6 +478,28 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                             Row(
                                               mainAxisSize: MainAxisSize.min,
                                               children: [
+                                                IconButton(
+                                                  tooltip: 'تسجيل دفعة',
+                                                  onPressed: () async {
+                                                    final balanceMinor = (row['balance_minor'] as num?)?.toInt() ?? 0;
+                                                    final saved = await showDialog<bool>(
+                                                      context: context,
+                                                      builder: (_) => ReceiptDialog(
+                                                        api: widget.api,
+                                                        tenantId: widget.tenantId!,
+                                                        clientId: row['id'] as int,
+                                                        balanceMinor: balanceMinor,
+                                                        onExpired: widget.onExpired,
+                                                      ),
+                                                    );
+                                                    if (saved == true && mounted) _load();
+                                                  },
+                                                  icon: const Icon(
+                                                    Icons.payments_outlined,
+                                                    size: 19,
+                                                    color: teal,
+                                                  ),
+                                                ),
                                                 IconButton(
                                                   tooltip:
                                                       'تعديل ${row['name']}',

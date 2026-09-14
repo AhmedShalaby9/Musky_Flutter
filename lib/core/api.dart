@@ -72,6 +72,9 @@ abstract class MuskyApi {
   );
   Future<Map<String, dynamic>> uploadTenantLogo(int tenantId, String path);
   Future<void> deleteTenantLogo(int tenantId);
+  Future<Map<String, dynamic>> createClientReceipt(int tenantId, int clientId, int amountMinor, String method, String notes);
+  Future<void> reverseClientReceipt(int tenantId, int clientId, int receiptId);
+  Future<Map<String, dynamic>> clientLedger(int tenantId, int clientId);
   void clearSession();
   void dispose();
 }
@@ -354,6 +357,32 @@ class HttpMuskyApi implements MuskyApi {
   Future<void> deleteTenantLogo(int tenantId) async {
     await _request('DELETE', 'tenants/$tenantId/logo');
   }
+
+  @override
+  Future<Map<String, dynamic>> createClientReceipt(
+    int tenantId,
+    int clientId,
+    int amountMinor,
+    String method,
+    String notes,
+  ) => _request('POST', 'tenants/$tenantId/clients/$clientId/receipts', {
+    'amount_minor': amountMinor,
+    'method': method,
+    'notes': notes,
+  });
+
+  @override
+  Future<void> reverseClientReceipt(
+    int tenantId,
+    int clientId,
+    int receiptId,
+  ) async {
+    await _request('POST', 'tenants/$tenantId/clients/$clientId/receipts/$receiptId/reverse');
+  }
+
+  @override
+  Future<Map<String, dynamic>> clientLedger(int tenantId, int clientId) =>
+      _request('GET', 'tenants/$tenantId/clients/$clientId/ledger');
 
   @override
   void clearSession() {
