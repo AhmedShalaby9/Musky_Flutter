@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../core/api.dart';
 import '../core/money.dart';
 import '../core/theme.dart';
+import 'pdf_viewer.dart';
 
 class RecordPicker extends StatefulWidget {
   const RecordPicker({
@@ -763,10 +763,16 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
   Future<void> _openPdf() async {
     final url = '${_invoice?['pdf_url']}';
     if (url.isEmpty) return;
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => InvoicePdfScreen(
+          url: url,
+          title: invoiceLabel(_invoice!),
+        ),
+      ),
+    );
   }
 
   @override
@@ -875,7 +881,7 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
         if (_invoice != null && '${_invoice!['pdf_url']}'.isNotEmpty)
           OutlinedButton.icon(
             onPressed: _busy ? null : _openPdf,
-            icon: const Icon(Icons.open_in_new),
+            icon: const Icon(Icons.picture_as_pdf_outlined),
             label: const Text('عرض PDF'),
           ),
         OutlinedButton.icon(

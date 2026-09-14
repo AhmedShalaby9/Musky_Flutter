@@ -55,7 +55,7 @@ abstract class MuskyApi {
   Future<AppUser> currentUser();
   Future<void> logout();
   Future<void> changePassword(String current, String next);
-  Future<List<Map<String, dynamic>>> list(String path, {int offset = 0, String q = ''});
+  Future<List<Map<String, dynamic>>> list(String path, {int offset = 0, String q = '', int? daysWithoutPayment});
   Future<void> saveClient(int tenantId, Map<String, dynamic> data, {int? id});
   Future<Map<String, dynamic>> recordPayment(
     int tenantId,
@@ -83,7 +83,7 @@ class HttpMuskyApi implements MuskyApi {
   HttpMuskyApi({
     String address = const String.fromEnvironment(
       'MUSKY_API_URL',
-      defaultValue: 'http://169.58.36.30/api/v1',
+      defaultValue: 'https://169.58.36.30/api/v1',
     ),
   }) : _base = Uri.parse(address) {
     if (!_base.hasAuthority ||
@@ -112,9 +112,19 @@ class HttpMuskyApi implements MuskyApi {
     String path, [
     Map<String, dynamic>? body,
   ]) async {
-    final client = HttpClient()
-      ..connectionTimeout = const Duration(seconds: 8)
-      ..findProxy = (uri) => 'DIRECT';
+    return _attempt(method, path, body, true);
+  }
+
+  Future<Map<String, dynamic>> _attempt(
+    String method,
+    String path, [
+    Map<String, dynamic>? body,
+    bool retry = false,
+  ]) async {
+    final client = HttpClient();
+    client.connectionTimeout = const Duration(seconds: 15);
+    client.findProxy = (uri) => 'DIRECT';
+    client.badCertificateCallback = (cert, host, port) => true;
     try {
       return await (() async {
         final url = Uri.parse('${address.replaceAll(RegExp(r'/+$'), '')}/$path');
@@ -158,19 +168,22 @@ class HttpMuskyApi implements MuskyApi {
           );
         }
         return data;
-      })().timeout(const Duration(seconds: 15));
+      })().timeout(const Duration(seconds: 20));
     } on TimeoutException catch (e, st) {
       print('[HTTP] TimeoutException: $e\n$st');
+      if (retry) return _attempt(method, path, body, false);
       throw const ApiException(
         'The connection timed out. Check your server and try again.',
       );
     } on SocketException catch (e, st) {
       print('[HTTP] SocketException: $e\n$st');
+      if (retry) return _attempt(method, path, body, false);
       throw const ApiException(
         'Cannot connect to Musky. Check that your server is running.',
       );
     } on HandshakeException catch (e, st) {
       print('[HTTP] HandshakeException: $e\n$st');
+      if (retry) return _attempt(method, path, body, false);
       throw const ApiException(
         'The server security certificate could not be verified.',
       );
@@ -240,9 +253,10 @@ class HttpMuskyApi implements MuskyApi {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> list(String path, {int offset = 0, String q = ''}) async {
+  Future<List<Map<String, dynamic>>> list(String path, {int offset = 0, String q = '', int? daysWithoutPayment}) async {
     var url = '$path?limit=50&offset=$offset';
     if (q.isNotEmpty) url += '&q=${Uri.encodeQueryComponent(q)}';
+    if (daysWithoutPayment != null) url += '&days_without_payment=$daysWithoutPayment';
     final data = await _request('GET', url);
     try {
       return (data['data'] as List).cast<Map<String, dynamic>>();
@@ -331,9 +345,10 @@ class HttpMuskyApi implements MuskyApi {
     String path,
     String boundary,
   ) async {
-    final client = HttpClient()
-      ..connectionTimeout = const Duration(seconds: 8)
-      ..findProxy = (uri) => 'DIRECT';
+    final client = HttpClient();
+    client.connectionTimeout = const Duration(seconds: 8);
+    client.findProxy = (uri) => 'DIRECT';
+    client.badCertificateCallback = (cert, host, port) => true;
     final request = await client.openUrl(
       method,
       Uri.parse('${address.replaceAll(RegExp(r'/+$'), '')}/$path'),

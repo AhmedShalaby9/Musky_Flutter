@@ -35,6 +35,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
   bool _loading = true;
   String? _error;
   int _offset = 0, _requestId = 0;
+  int? _daysFilter;
   bool get _clients => widget.section == 'العملاء';
   bool get _businesses => widget.section == 'الأعمال';
   @override
@@ -61,7 +62,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
       final path = _businesses
           ? 'tenants'
           : 'tenants/${widget.tenantId}/${_clients ? 'clients' : 'users'}';
-      final rows = await widget.api.list(path, offset: _offset, q: _clients ? _search.text.trim() : '');
+      final rows = await widget.api.list(path, offset: _offset, q: _clients ? _search.text.trim() : '', daysWithoutPayment: _clients ? _daysFilter : null);
       if (mounted && requestId == _requestId) {
         setState(() => _rows = rows);
       }
@@ -251,6 +252,19 @@ class _RecordsScreenState extends State<RecordsScreen> {
                 ),
               ),
             ),
+            if (_clients) ...[
+              const SizedBox(width: 12),
+              _DaysFilterButton(
+                value: _daysFilter,
+                onChanged: (v) {
+                  setState(() {
+                    _daysFilter = v;
+                    _offset = 0;
+                  });
+                  _load();
+                },
+              ),
+            ],
             const SizedBox(width: 12),
             IconButton(
               onPressed: _loading ? null : _load,
@@ -797,6 +811,61 @@ class _ClientDialogState extends State<ClientDialog> {
       ],
     ),
   );
+}
+
+class _DaysFilterButton extends StatelessWidget {
+  const _DaysFilterButton({required this.value, required this.onChanged});
+  final int? value;
+  final ValueChanged<int?> onChanged;
+
+  static const _options = [3, 7, 14, 30];
+
+  @override
+  Widget build(BuildContext context) {
+    final active = value != null;
+    return PopupMenuButton<int?>(
+      tooltip: 'تصفية حسب آخر دفعة',
+      onSelected: onChanged,
+      itemBuilder: (_) => [
+        PopupMenuItem<int?>(
+          value: null,
+          child: Text(
+            'كل العملاء',
+            style: TextStyle(color: active ? null : teal, fontWeight: active ? null : FontWeight.w600),
+          ),
+        ),
+        for (final d in _options)
+          PopupMenuItem<int?>(
+            value: d,
+            child: Text(
+              'لم يدفع $d أيام+',
+              style: TextStyle(color: value == d ? teal : null, fontWeight: value == d ? FontWeight.w600 : null),
+            ),
+          ),
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          border: Border.all(color: active ? teal : line),
+          borderRadius: BorderRadius.circular(8),
+          color: active ? teal.withValues(alpha: .08) : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.calendar_today_outlined, size: 15, color: active ? teal : muted),
+            const SizedBox(width: 6),
+            Text(
+              active ? 'لم يدفع $value أيام+' : 'آخر دفعة',
+              style: TextStyle(fontSize: 13, color: active ? teal : muted),
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.arrow_drop_down, size: 18, color: active ? teal : muted),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _BalanceCell extends StatelessWidget {
