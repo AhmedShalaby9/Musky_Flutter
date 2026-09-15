@@ -9,30 +9,14 @@ class ApiException implements Exception {
   final int? status;
 }
 
-/// Cancels an in-flight HTTP request when its owning screen is disposed.
+/// Signals that a caller is no longer interested in an in-flight request.
+/// The request itself may still complete; its result is simply ignored by
+/// the cubit (checked via _requestId). We no longer close the shared
+/// HttpClient on cancellation — doing so would discard pooled connections.
 class ApiRequestCancellation {
-  HttpClient? _client;
   bool _cancelled = false;
-
   bool get isCancelled => _cancelled;
-
-  void cancel() {
-    _cancelled = true;
-    _client?.close(force: true);
-    _client = null;
-  }
-
-  void _attach(HttpClient client) {
-    if (_cancelled) {
-      client.close(force: true);
-      throw const ApiRequestCancelled();
-    }
-    _client = client;
-  }
-
-  void _detach(HttpClient client) {
-    if (identical(_client, client)) _client = null;
-  }
+  void cancel() { _cancelled = true; }
 }
 
 class ApiRequestCancelled implements Exception {
@@ -134,7 +118,17 @@ class HttpMuskyApi implements MuskyApi {
   }
   final Uri _base;
   String? _token;
+  late HttpClient _httpClient = _makeClient();
   HttpClient? _uploadClient;
+
+  static HttpClient _makeClient() {
+    final c = HttpClient();
+    c.connectionTimeout = const Duration(seconds: 8);
+    c.idleTimeout = const Duration(seconds: 55);
+    c.findProxy = (uri) => 'DIRECT';
+    c.badCertificateCallback = (cert, host, port) => true;
+    return c;
+  }
   @override
   String get address => _base.toString();
 
@@ -181,11 +175,7 @@ class HttpMuskyApi implements MuskyApi {
     if (cancellation?.isCancelled ?? false) {
       throw const ApiRequestCancelled();
     }
-    final client = HttpClient();
-    client.connectionTimeout = const Duration(seconds: 15);
-    client.findProxy = (uri) => 'DIRECT';
-    client.badCertificateCallback = (cert, host, port) => true;
-    cancellation?._attach(client);
+    final client = _httpClient;
     try {
       return await (() async {
         final url = Uri.parse('${address.replaceAll(RegExp(r'/+$'), '')}/$path');
@@ -268,8 +258,7 @@ class HttpMuskyApi implements MuskyApi {
         'Unexpected server response. Check the API address.',
       );
     } finally {
-      cancellation?._detach(client);
-      client.close(force: true);
+      // _httpClient is shared — do not close it here.
     }
   }
 
@@ -520,8 +509,13 @@ class HttpMuskyApi implements MuskyApi {
   @override
   void clearSession() {
     _token = null;
+    _httpClient.close(force: true);
+    _httpClient = _makeClient();
   }
 
   @override
-  void dispose() => clearSession();
+  void dispose() {
+    _token = null;
+    _httpClient.close(force: true);
+  }
 }
