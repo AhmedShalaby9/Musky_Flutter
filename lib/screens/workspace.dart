@@ -412,6 +412,8 @@ class _WorkspaceState extends State<Workspace> {
   Widget _overview() => FinancialOverview(
     key: ValueKey('overview:$_tenantId'),
     cubit: _overviewCubit!,
+    api: widget.api,
+    tenantId: _tenantId!,
     name: widget.user.name,
     onExpired: _expired,
     onInvoices: () => setState(() => _section = 'الفواتير'),
