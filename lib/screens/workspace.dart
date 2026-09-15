@@ -1,6 +1,10 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:file_selector/file_selector.dart';
+import '../bloc/records_cubit.dart';
+import '../bloc/commerce_cubit.dart';
+import '../bloc/overview_cubit.dart';
+import '../bloc/journal_cubit.dart';
 import '../core/api.dart';
 import '../core/theme.dart';
 import 'records.dart';
@@ -28,11 +32,49 @@ class _WorkspaceState extends State<Workspace> {
   String? _tenantName;
   String? _logoUrl;
   bool _signingOut = false;
+
+  late final RecordsCubit _businessesCubit;
+  RecordsCubit? _clientsCubit;
+  RecordsCubit? _teamCubit;
+  CommerceCubit? _productsCubit;
+  CommerceCubit? _invoicesCubit;
+  OverviewCubit? _overviewCubit;
+  JournalCubit? _journalCubit;
+
+  void _initTenantCubits(int tenantId) {
+    _clientsCubit?.close();
+    _teamCubit?.close();
+    _productsCubit?.close();
+    _invoicesCubit?.close();
+    _overviewCubit?.close();
+    _journalCubit?.close();
+    _clientsCubit = RecordsCubit(widget.api, 'العملاء', tenantId);
+    _teamCubit = RecordsCubit(widget.api, 'الفريق', tenantId);
+    _productsCubit = CommerceCubit(widget.api, tenantId, products: true);
+    _invoicesCubit = CommerceCubit(widget.api, tenantId, products: false);
+    _overviewCubit = OverviewCubit(widget.api, tenantId);
+    _journalCubit = JournalCubit(widget.api, tenantId);
+  }
+
   @override
   void initState() {
     super.initState();
     _logoUrl = widget.user.logoUrl;
+    _businessesCubit = RecordsCubit(widget.api, 'الأعمال', null);
+    if (_tenantId != null) _initTenantCubits(_tenantId!);
     _refreshProfile();
+  }
+
+  @override
+  void dispose() {
+    _businessesCubit.close();
+    _clientsCubit?.close();
+    _teamCubit?.close();
+    _productsCubit?.close();
+    _invoicesCubit?.close();
+    _overviewCubit?.close();
+    _journalCubit?.close();
+    super.dispose();
   }
 
   Future<void> _refreshProfile() async {
@@ -318,6 +360,9 @@ class _WorkspaceState extends State<Workspace> {
                       child: switch (_section) {
                         'المنتجات' || 'الفواتير' => CommerceScreen(
                           key: ValueKey('$_section:$_tenantId'),
+                          cubit: _section == 'المنتجات'
+                              ? _productsCubit!
+                              : _invoicesCubit!,
                           api: widget.api,
                           tenantId: _tenantId!,
                           products: _section == 'المنتجات',
@@ -325,22 +370,30 @@ class _WorkspaceState extends State<Workspace> {
                         ),
                         'دفتر اليومية' => DailyJournalScreen(
                           key: ValueKey('journal:$_tenantId'),
-                          api: widget.api,
-                          tenantId: _tenantId!,
+                          cubit: _journalCubit!,
                           onExpired: _expired,
                         ),
                         'العملاء' || 'الفريق' || 'الأعمال' => RecordsScreen(
                           key: ValueKey('$_section:$_tenantId'),
+                          cubit: _section == 'العملاء'
+                              ? _clientsCubit!
+                              : _section == 'الفريق'
+                              ? _teamCubit!
+                              : _businessesCubit,
                           api: widget.api,
                           user: user,
                           section: _section,
                           tenantId: _tenantId,
                           onExpired: _expired,
-                          onTenant: (tenant) => setState(() {
-                            _tenantId = tenant['id'] as int;
-                            _tenantName = tenant['name'] as String;
-                            _section = 'نظرة عامة';
-                          }),
+                          onTenant: (tenant) {
+                            final id = tenant['id'] as int;
+                            _initTenantCubits(id);
+                            setState(() {
+                              _tenantId = id;
+                              _tenantName = tenant['name'] as String;
+                              _section = 'نظرة عامة';
+                            });
+                          },
                         ),
                         'الحساب' => _account(),
                         _ => _overview(),
@@ -358,8 +411,7 @@ class _WorkspaceState extends State<Workspace> {
 
   Widget _overview() => FinancialOverview(
     key: ValueKey('overview:$_tenantId'),
-    api: widget.api,
-    tenantId: _tenantId!,
+    cubit: _overviewCubit!,
     name: widget.user.name,
     onExpired: _expired,
     onInvoices: () => setState(() => _section = 'الفواتير'),

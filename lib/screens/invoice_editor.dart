@@ -22,6 +22,7 @@ class RecordPicker extends StatefulWidget {
 }
 
 class _RecordPickerState extends State<RecordPicker> {
+  final _loadCancellation = ApiRequestCancellation();
   final _search = TextEditingController();
   Timer? _timer;
   List<Map<String, dynamic>> _rows = [];
@@ -36,6 +37,7 @@ class _RecordPickerState extends State<RecordPicker> {
 
   @override
   void dispose() {
+    _loadCancellation.cancel();
     _timer?.cancel();
     _search.dispose();
     super.dispose();
@@ -56,9 +58,10 @@ class _RecordPickerState extends State<RecordPicker> {
           'offset': '$_offset',
         },
       ).query;
-      final data = await widget.api.request(
+      final data = await widget.api.requestWithCancellation(
         'GET',
         'tenants/${widget.tenantId}/${widget.products ? 'products' : 'clients'}?$query',
+        cancellation: _loadCancellation,
       );
       if (mounted && ticket == _ticket) {
         setState(
@@ -611,6 +614,7 @@ class InvoiceDetails extends StatefulWidget {
 }
 
 class _InvoiceDetailsState extends State<InvoiceDetails> {
+  final _loadCancellation = ApiRequestCancellation();
   Map<String, dynamic>? _invoice;
   bool _busy = true;
   String? _error;
@@ -643,7 +647,11 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
       _error = null;
     });
     try {
-      final data = await widget.api.request('GET', _path);
+      final data = await widget.api.requestWithCancellation(
+        'GET',
+        _path,
+        cancellation: _loadCancellation,
+      );
       if (mounted) {
         setState(() => _invoice = data);
       }
@@ -654,6 +662,12 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
         setState(() => _busy = false);
       }
     }
+  }
+
+  @override
+  void dispose() {
+    _loadCancellation.cancel();
+    super.dispose();
   }
 
   Future<void> _transition(String action) async {

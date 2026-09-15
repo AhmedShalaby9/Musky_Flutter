@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:file_selector/file_selector.dart';
+import '../bloc/records_cubit.dart';
 import '../core/api.dart';
 import '../core/money.dart';
 import '../core/theme.dart';
@@ -10,6 +12,7 @@ import 'client_detail.dart';
 class RecordsScreen extends StatefulWidget {
   const RecordsScreen({
     super.key,
+    required this.cubit,
     required this.api,
     required this.user,
     required this.section,
@@ -17,6 +20,7 @@ class RecordsScreen extends StatefulWidget {
     required this.onExpired,
     required this.onTenant,
   });
+  final RecordsCubit cubit;
   final MuskyApi api;
   final AppUser user;
   final String section;
@@ -28,20 +32,16 @@ class RecordsScreen extends StatefulWidget {
 }
 
 class _RecordsScreenState extends State<RecordsScreen> {
-  List<Map<String, dynamic>> _rows = [];
   final _search = TextEditingController();
   final _horizontal = ScrollController();
   Timer? _searchTimer;
-  bool _loading = true;
-  String? _error;
-  int _offset = 0, _requestId = 0;
-  int? _daysFilter;
   bool get _clients => widget.section == 'العملاء';
   bool get _businesses => widget.section == 'الأعمال';
+
   @override
   void initState() {
     super.initState();
-    _load();
+    widget.cubit.loadIfNeeded();
   }
 
   @override
@@ -50,40 +50,6 @@ class _RecordsScreenState extends State<RecordsScreen> {
     _search.dispose();
     _horizontal.dispose();
     super.dispose();
-  }
-
-  Future<void> _load() async {
-    final requestId = ++_requestId;
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final path = _businesses
-          ? 'tenants'
-          : 'tenants/${widget.tenantId}/${_clients ? 'clients' : 'users'}';
-      final rows = await widget.api.list(path, offset: _offset, q: _clients ? _search.text.trim() : '', daysWithoutPayment: _clients ? _daysFilter : null);
-      if (mounted && requestId == _requestId) {
-        setState(() => _rows = rows);
-      }
-    } on ApiException catch (e) {
-      if (!mounted || requestId != _requestId) {
-        return;
-      }
-      if (e.status == 401) {
-        widget.onExpired();
-      } else {
-        setState(() => _error = e.message);
-      }
-    } catch (_) {
-      if (mounted && requestId == _requestId) {
-        setState(() => _error = 'تعذّر تحميل السجلات. حاول مجدداً.');
-      }
-    } finally {
-      if (mounted && requestId == _requestId) {
-        setState(() => _loading = false);
-      }
-    }
   }
 
   Future<void> _edit([Map<String, dynamic>? client]) async {
@@ -98,7 +64,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
       ),
     );
     if (saved == true && mounted) {
-      await _load();
+      widget.cubit.refresh();
     }
   }
 
@@ -109,7 +75,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
           TraderDialog(api: widget.api, onExpired: widget.onExpired),
     );
     if (saved == true && mounted) {
-      await _load();
+      widget.cubit.refresh();
     }
   }
 
@@ -133,478 +99,504 @@ class _RecordsScreenState extends State<RecordsScreen> {
       ),
     );
     if (confirmed != true) return;
-    setState(() => _loading = true);
     try {
       await widget.api.request(
         'DELETE',
         'tenants/${widget.tenantId}/clients/${client['id']}',
       );
-      if (mounted) {
-        await _load();
-      }
+      if (mounted) widget.cubit.refresh();
     } on ApiException catch (e) {
       if (!mounted) return;
-      if (e.status == 401) {
-        widget.onExpired();
-      } else {
-        setState(() => _error = e.message);
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() => _error = 'تعذّر حذف العميل. حاول مجدداً.');
-      }
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
+      if (e.status == 401) widget.onExpired();
+    } catch (_) {}
   }
 
   Future<void> _toggle(Map<String, dynamic> client) async {
-    setState(() => _loading = true);
     try {
       await widget.api.saveClient(widget.tenantId!, {
         'active': client['active'] != true,
       }, id: client['id'] as int);
-      if (mounted) {
-        await _load();
-      }
+      if (mounted) widget.cubit.refresh();
     } on ApiException catch (e) {
-      if (!mounted) {
-        return;
-      }
-      if (e.status == 401) {
-        widget.onExpired();
-      } else {
-        setState(() => _error = e.message);
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() => _error = 'تعذّر تحديث العميل. حاول مجدداً.');
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _loading = false);
-      }
-    }
+      if (!mounted) return;
+      if (e.status == 401) widget.onExpired();
+    } catch (_) {}
   }
 
   @override
   Widget build(BuildContext context) {
-    final rows = _rows;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
+    return BlocConsumer<RecordsCubit, RecordsState>(
+      bloc: widget.cubit,
+      listener: (context, state) {
+        if (state.expired) widget.onExpired();
+      },
+      builder: (context, state) {
+        final rows = state.rows;
+        final loading = state.loading;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.section,
-                    style: Theme.of(context).textTheme.headlineMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _clients
-                        ? 'الأشخاص الذين تتعامل معهم.'
-                        : _businesses
-                        ? 'مساحة عمل مخصصة لكل تاجر.'
-                        : 'الأشخاص الذين يصلون إلى مساحة العمل.',
-                    style: const TextStyle(color: muted),
-                  ),
-                ],
-              ),
-            ),
-            if (_clients)
-              FilledButton.icon(
-                onPressed: _loading ? null : () => _edit(),
-                icon: const Icon(Icons.add, size: 19),
-                label: const Text('إضافة عميل'),
-              ),
-            if (_businesses)
-              FilledButton.icon(
-                onPressed: _loading ? null : _addTrader,
-                icon: const Icon(Icons.add, size: 19),
-                label: const Text('إضافة تاجر'),
-              ),
-          ],
-        ),
-        const SizedBox(height: 26),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _search,
-                onChanged: (_) {
-                  _searchTimer?.cancel();
-                  _searchTimer = Timer(const Duration(milliseconds: 400), () {
-                    _offset = 0;
-                    _load();
-                  });
-                },
-                decoration: const InputDecoration(
-                  hintText: 'بحث في جميع السجلات',
-                  prefixIcon: Icon(Icons.search),
-                  contentPadding: EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 14,
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.section,
+                        style: Theme.of(context).textTheme.headlineMedium,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _clients
+                            ? 'الأشخاص الذين تتعامل معهم.'
+                            : _businesses
+                            ? 'مساحة عمل مخصصة لكل تاجر.'
+                            : 'الأشخاص الذين يصلون إلى مساحة العمل.',
+                        style: const TextStyle(color: muted),
+                      ),
+                    ],
                   ),
                 ),
-              ),
+                if (_clients)
+                  FilledButton.icon(
+                    onPressed: loading ? null : () => _edit(),
+                    icon: const Icon(Icons.add, size: 19),
+                    label: const Text('إضافة عميل'),
+                  ),
+                if (_businesses)
+                  FilledButton.icon(
+                    onPressed: loading ? null : _addTrader,
+                    icon: const Icon(Icons.add, size: 19),
+                    label: const Text('إضافة تاجر'),
+                  ),
+              ],
             ),
-            if (_clients) ...[
-              const SizedBox(width: 12),
-              _DaysFilterButton(
-                value: _daysFilter,
-                onChanged: (v) {
-                  setState(() {
-                    _daysFilter = v;
-                    _offset = 0;
-                  });
-                  _load();
-                },
-              ),
-            ],
-            const SizedBox(width: 12),
-            IconButton(
-              onPressed: _loading ? null : _load,
-              tooltip: 'تحديث',
-              icon: const Icon(Icons.refresh),
-            ),
-          ],
-        ),
-        const SizedBox(height: 18),
-        Expanded(
-          child: Container(
-            width: double.infinity,
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: line),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _error != null
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ErrorNotice(_error!),
-                          const SizedBox(height: 16),
-                          OutlinedButton(
-                            onPressed: _load,
-                            child: const Text('إعادة المحاولة'),
-                          ),
-                        ],
+            const SizedBox(height: 26),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _search,
+                    onChanged: (_) {
+                      _searchTimer?.cancel();
+                      _searchTimer = Timer(const Duration(milliseconds: 400), () {
+                        widget.cubit.search(_search.text.trim());
+                      });
+                    },
+                    decoration: const InputDecoration(
+                      hintText: 'بحث في جميع السجلات',
+                      prefixIcon: Icon(Icons.search),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 14,
                       ),
                     ),
-                  )
-                : rows.isEmpty
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            _clients ? Icons.people_outline : Icons.folder_open,
-                            size: 46,
-                            color: muted,
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            _search.text.trim().isNotEmpty
-                                ? 'لا توجد سجلات مطابقة'
-                                : 'لا توجد سجلات في هذه الصفحة',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            _search.text.trim().isNotEmpty
-                                ? 'جرّب بحثاً آخر أو امسح حقل البحث.'
-                                : _clients
-                                ? 'أضف أول عميل لتنظيم جهات الاتصال.'
-                                : 'حدّث الصفحة بعد إنشاء السجلات.',
-                            style: const TextStyle(color: muted),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                : LayoutBuilder(
-                    builder: (context, size) => Scrollbar(
-                      controller: _horizontal,
-                      thumbVisibility: true,
-                      child: SingleChildScrollView(
-                        controller: _horizontal,
-                        scrollDirection: Axis.horizontal,
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(minWidth: size.maxWidth),
-                          child: SingleChildScrollView(
-                            child: DataTable(
-                              headingRowColor: WidgetStateProperty.all(
-                                const Color(0xFFF8FAF6),
+                  ),
+                ),
+                if (_clients) ...[
+                  const SizedBox(width: 12),
+                  _DaysFilterButton(
+                    value: state.daysFilter,
+                    onChanged: (v) => widget.cubit.filterDays(v),
+                  ),
+                ],
+                const SizedBox(width: 12),
+                IconButton(
+                  onPressed: loading ? null : widget.cubit.refresh,
+                  tooltip: 'تحديث',
+                  icon: const Icon(Icons.refresh),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Expanded(
+              child: Container(
+                width: double.infinity,
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border.all(color: line),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : state.error != null
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ErrorNotice(state.error!),
+                              const SizedBox(height: 16),
+                              OutlinedButton(
+                                onPressed: widget.cubit.refresh,
+                                child: const Text('إعادة المحاولة'),
                               ),
-                              headingTextStyle: const TextStyle(
-                                fontWeight: FontWeight.w600,
+                            ],
+                          ),
+                        ),
+                      )
+                    : rows.isEmpty
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                _clients
+                                    ? Icons.people_outline
+                                    : Icons.folder_open,
+                                size: 46,
                                 color: muted,
-                                fontSize: 12,
                               ),
-                              dataRowMinHeight: 66,
-                              dataRowMaxHeight: 66,
-                              columns: [
-                                const DataColumn(label: Text('الاسم')),
-                                if (!_clients && !_businesses)
-                                  const DataColumn(
-                                    label: Text('البريد الإلكتروني'),
+                              const SizedBox(height: 16),
+                              Text(
+                                _search.text.trim().isNotEmpty
+                                    ? 'لا توجد سجلات مطابقة'
+                                    : 'لا توجد سجلات في هذه الصفحة',
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                _search.text.trim().isNotEmpty
+                                    ? 'جرّب بحثاً آخر أو امسح حقل البحث.'
+                                    : _clients
+                                    ? 'أضف أول عميل لتنظيم جهات الاتصال.'
+                                    : 'حدّث الصفحة بعد إنشاء السجلات.',
+                                style: const TextStyle(color: muted),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : LayoutBuilder(
+                        builder: (context, size) => Scrollbar(
+                          controller: _horizontal,
+                          thumbVisibility: true,
+                          child: SingleChildScrollView(
+                            controller: _horizontal,
+                            scrollDirection: Axis.horizontal,
+                            child: ConstrainedBox(
+                              constraints:
+                                  BoxConstraints(minWidth: size.maxWidth),
+                              child: SingleChildScrollView(
+                                child: DataTable(
+                                  headingRowColor: WidgetStateProperty.all(
+                                    const Color(0xFFF8FAF6),
                                   ),
-                                if (_clients)
-                                  const DataColumn(label: Text('الهاتف')),
-                                if (_clients)
-                                  const DataColumn(
-                                    label: Text('الرصيد'),
-                                    numeric: true,
+                                  headingTextStyle: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: muted,
+                                    fontSize: 12,
                                   ),
-                                if (!_clients && !_businesses)
-                                  const DataColumn(label: Text('الدور')),
-                                const DataColumn(label: Text('الحالة')),
-                                if (_clients || _businesses)
-                                  const DataColumn(label: Text('الإجراءات')),
-                              ],
-                              rows: rows
-                                  .map(
-                                    (row) => DataRow(
-                                      cells: [
-                                        DataCell(
-                                          SizedBox(
-                                            width: 180,
-                                            child: _clients
-                                                ? TextButton(
-                                                    style: TextButton.styleFrom(
-                                                      padding: EdgeInsets.zero,
-                                                      alignment: AlignmentDirectional.centerStart,
-                                                    ),
-                                                    onPressed: () async {
-                                                      await Navigator.push(
-                                                        context,
-                                                        MaterialPageRoute(
-                                                          builder: (_) => ClientDetailScreen(
-                                                            api: widget.api,
-                                                            tenantId: widget.tenantId!,
-                                                            clientId: row['id'] as int,
-                                                            clientName: '${row['name']}',
-                                                            onExpired: widget.onExpired,
+                                  dataRowMinHeight: 66,
+                                  dataRowMaxHeight: 66,
+                                  columns: [
+                                    const DataColumn(label: Text('الاسم')),
+                                    if (!_clients && !_businesses)
+                                      const DataColumn(
+                                        label: Text('البريد الإلكتروني'),
+                                      ),
+                                    if (_clients)
+                                      const DataColumn(label: Text('الهاتف')),
+                                    if (_clients)
+                                      const DataColumn(
+                                        label: Text('الرصيد'),
+                                        numeric: true,
+                                      ),
+                                    if (!_clients && !_businesses)
+                                      const DataColumn(label: Text('الدور')),
+                                    const DataColumn(label: Text('الحالة')),
+                                    if (_clients || _businesses)
+                                      const DataColumn(
+                                        label: Text('الإجراءات'),
+                                      ),
+                                  ],
+                                  rows: rows
+                                      .map(
+                                        (row) => DataRow(
+                                          cells: [
+                                            DataCell(
+                                              SizedBox(
+                                                width: 180,
+                                                child: _clients
+                                                    ? TextButton(
+                                                        style:
+                                                            TextButton.styleFrom(
+                                                          padding:
+                                                              EdgeInsets.zero,
+                                                          alignment:
+                                                              AlignmentDirectional
+                                                                  .centerStart,
+                                                        ),
+                                                        onPressed: () async {
+                                                          await Navigator.push(
+                                                            context,
+                                                            MaterialPageRoute(
+                                                              builder: (_) =>
+                                                                  ClientDetailScreen(
+                                                                api: widget.api,
+                                                                tenantId:
+                                                                    widget
+                                                                        .tenantId!,
+                                                                clientId:
+                                                                    row['id']
+                                                                        as int,
+                                                                clientName:
+                                                                    '${row['name']}',
+                                                                onExpired:
+                                                                    widget
+                                                                        .onExpired,
+                                                              ),
+                                                            ),
+                                                          );
+                                                          if (mounted) {
+                                                            widget.cubit
+                                                                .refresh();
+                                                          }
+                                                        },
+                                                        child: Text(
+                                                          '${row['name']}',
+                                                          maxLines: 1,
+                                                          overflow: TextOverflow
+                                                              .ellipsis,
+                                                          style: const TextStyle(
+                                                            fontWeight:
+                                                                FontWeight.w500,
                                                           ),
                                                         ),
-                                                      );
-                                                      if (mounted) _load();
-                                                    },
-                                                    child: Text(
-                                                      '${row['name']}',
-                                                      maxLines: 1,
-                                                      overflow: TextOverflow.ellipsis,
-                                                      style: const TextStyle(
-                                                        fontWeight: FontWeight.w500,
+                                                      )
+                                                    : Text(
+                                                        '${row['name']}',
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                        style: const TextStyle(
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                        ),
                                                       ),
-                                                    ),
-                                                  )
-                                                : Text(
-                                                    '${row['name']}',
+                                              ),
+                                            ),
+                                            if (!_clients && !_businesses)
+                                              DataCell(
+                                                SizedBox(
+                                                  width: 200,
+                                                  child: Text(
+                                                    '${row['email'] ?? ''}'
+                                                            .isEmpty
+                                                        ? '—'
+                                                        : '${row['email']}',
                                                     maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
-                                                    style: const TextStyle(
-                                                      fontWeight: FontWeight.w500,
-                                                    ),
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
                                                   ),
-                                          ),
-                                        ),
-                                        if (!_clients && !_businesses)
-                                          DataCell(
-                                            SizedBox(
-                                              width: 200,
-                                              child: Text(
-                                                '${row['email'] ?? ''}'.isEmpty
-                                                    ? '—'
-                                                    : '${row['email']}',
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            if (_clients)
+                                              DataCell(
+                                                Text(
+                                                  '${row['phone'] ?? ''}'
+                                                          .isEmpty
+                                                      ? '—'
+                                                      : '${row['phone']}',
+                                                ),
+                                              ),
+                                            if (_clients)
+                                              DataCell(
+                                                _BalanceCell(
+                                                  minor:
+                                                      (row['balance_minor']
+                                                              as num?)
+                                                          ?.toInt() ??
+                                                      0,
+                                                ),
+                                              ),
+                                            if (!_clients && !_businesses)
+                                              DataCell(
+                                                Text(
+                                                  row['role'] == 'trader'
+                                                      ? 'تاجر / مالك'
+                                                      : 'مسؤول',
+                                                ),
+                                              ),
+                                            DataCell(
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  horizontal: 10,
+                                                  vertical: 4,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: row['active'] == true
+                                                      ? const Color(0xFFEAF2E4)
+                                                      : paper,
+                                                  borderRadius:
+                                                      BorderRadius.circular(20),
+                                                ),
+                                                child: Text(
+                                                  row['active'] == true
+                                                      ? 'نشط'
+                                                      : _clients
+                                                      ? 'مؤرشف'
+                                                      : 'غير نشط',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color:
+                                                        row['active'] == true
+                                                            ? teal
+                                                            : muted,
+                                                  ),
+                                                ),
                                               ),
                                             ),
-                                          ),
-                                        if (_clients)
-                                          DataCell(
-                                            Text(
-                                              '${row['phone'] ?? ''}'.isEmpty
-                                                  ? '—'
-                                                  : '${row['phone']}',
-                                            ),
-                                          ),
-                                        if (_clients)
-                                          DataCell(
-                                            _BalanceCell(
-                                              minor: (row['balance_minor'] as num?)?.toInt() ?? 0,
-                                            ),
-                                          ),
-                                        if (!_clients && !_businesses)
-                                          DataCell(
-                                            Text(
-                                              row['role'] == 'trader'
-                                                  ? 'تاجر / مالك'
-                                                  : 'مسؤول',
-                                            ),
-                                          ),
-                                        DataCell(
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 10,
-                                              vertical: 4,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: row['active'] == true
-                                                  ? const Color(0xFFEAF2E4)
-                                                  : paper,
-                                              borderRadius:
-                                                  BorderRadius.circular(20),
-                                            ),
-                                            child: Text(
-                                              row['active'] == true
-                                                  ? 'نشط'
-                                                  : _clients
-                                                  ? 'مؤرشف'
-                                                  : 'غير نشط',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                color: row['active'] == true
-                                                    ? teal
-                                                    : muted,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                        if (_clients)
-                                          DataCell(
-                                            Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                IconButton(
-                                                  tooltip: 'تسجيل دفعة',
-                                                  onPressed: () async {
-                                                    final balanceMinor = (row['balance_minor'] as num?)?.toInt() ?? 0;
-                                                    final saved = await showDialog<bool>(
-                                                      context: context,
-                                                      builder: (_) => ReceiptDialog(
-                                                        api: widget.api,
-                                                        tenantId: widget.tenantId!,
-                                                        clientId: row['id'] as int,
-                                                        balanceMinor: balanceMinor,
-                                                        onExpired: widget.onExpired,
+                                            if (_clients)
+                                              DataCell(
+                                                Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    IconButton(
+                                                      tooltip: 'تسجيل دفعة',
+                                                      onPressed: () async {
+                                                        final balanceMinor =
+                                                            (row['balance_minor']
+                                                                    as num?)
+                                                                ?.toInt() ??
+                                                            0;
+                                                        final saved =
+                                                            await showDialog<
+                                                              bool
+                                                            >(
+                                                              context: context,
+                                                              builder: (_) =>
+                                                                  ReceiptDialog(
+                                                                api: widget.api,
+                                                                tenantId: widget
+                                                                    .tenantId!,
+                                                                clientId:
+                                                                    row['id']
+                                                                        as int,
+                                                                balanceMinor:
+                                                                    balanceMinor,
+                                                                onExpired:
+                                                                    widget
+                                                                        .onExpired,
+                                                              ),
+                                                            );
+                                                        if (saved == true &&
+                                                            mounted) {
+                                                          widget.cubit
+                                                              .refresh();
+                                                        }
+                                                      },
+                                                      icon: const Icon(
+                                                        Icons.payments_outlined,
+                                                        size: 19,
+                                                        color: teal,
                                                       ),
-                                                    );
-                                                    if (saved == true && mounted) _load();
-                                                  },
-                                                  icon: const Icon(
-                                                    Icons.payments_outlined,
-                                                    size: 19,
-                                                    color: teal,
-                                                  ),
+                                                    ),
+                                                    IconButton(
+                                                      tooltip:
+                                                          'تعديل ${row['name']}',
+                                                      onPressed: () =>
+                                                          _edit(row),
+                                                      icon: const Icon(
+                                                        Icons.edit_outlined,
+                                                        size: 19,
+                                                      ),
+                                                    ),
+                                                    IconButton(
+                                                      tooltip:
+                                                          row['active'] == true
+                                                              ? 'أرشفة ${row['name']}'
+                                                              : 'استعادة ${row['name']}',
+                                                      onPressed: () =>
+                                                          _toggle(row),
+                                                      icon: Icon(
+                                                        row['active'] == true
+                                                            ? Icons
+                                                                  .archive_outlined
+                                                            : Icons
+                                                                  .unarchive_outlined,
+                                                        size: 19,
+                                                      ),
+                                                    ),
+                                                    IconButton(
+                                                      tooltip:
+                                                          'حذف ${row['name']}',
+                                                      onPressed: () =>
+                                                          _delete(row),
+                                                      icon: const Icon(
+                                                        Icons.delete_outline,
+                                                        size: 19,
+                                                        color: Colors.red,
+                                                      ),
+                                                    ),
+                                                  ],
                                                 ),
-                                                IconButton(
-                                                  tooltip:
-                                                      'تعديل ${row['name']}',
-                                                  onPressed: () => _edit(row),
-                                                  icon: const Icon(
-                                                    Icons.edit_outlined,
-                                                    size: 19,
-                                                  ),
-                                                ),
-                                                IconButton(
-                                                  tooltip: row['active'] == true
-                                                      ? 'أرشفة ${row['name']}'
-                                                      : 'استعادة ${row['name']}',
-                                                  onPressed: () => _toggle(row),
-                                                  icon: Icon(
-                                                    row['active'] == true
-                                                        ? Icons.archive_outlined
-                                                        : Icons
-                                                              .unarchive_outlined,
-                                                    size: 19,
-                                                  ),
-                                                ),
-                                                IconButton(
-                                                  tooltip:
-                                                      'حذف ${row['name']}',
-                                                  onPressed: () =>
-                                                      _delete(row),
-                                                  icon: const Icon(
-                                                    Icons.delete_outline,
-                                                    size: 19,
-                                                    color: Colors.red,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        if (_businesses)
-                                          DataCell(
-                                            TextButton(
-                                              onPressed: row['active'] == true
-                                                  ? () => widget.onTenant(row)
-                                                  : null,
-                                              child: const Text(
-                                                'فتح مساحة العمل',
                                               ),
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  )
-                                  .toList(),
+                                            if (_businesses)
+                                              DataCell(
+                                                TextButton(
+                                                  onPressed:
+                                                      row['active'] == true
+                                                          ? () =>
+                                                              widget.onTenant(
+                                                                row,
+                                                              )
+                                                          : null,
+                                                  child: const Text(
+                                                    'فتح مساحة العمل',
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      )
+                                      .toList(),
+                                ),
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                'صفحة ${_offset ~/ 50 + 1} · ${_rows.length} سجل',
-                style: const TextStyle(color: muted, fontSize: 12),
               ),
             ),
-            IconButton(
-              tooltip: 'الصفحة السابقة',
-              onPressed: _loading || _offset == 0
-                  ? null
-                  : () {
-                      _offset -= 50;
-                      _load();
-                    },
-              icon: const Icon(Icons.chevron_left),
-            ),
-            IconButton(
-              tooltip: 'الصفحة التالية',
-              onPressed: _loading || _rows.length < 50
-                  ? null
-                  : () {
-                      _offset += 50;
-                      _load();
-                    },
-              icon: const Icon(Icons.chevron_right),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'صفحة ${state.offset ~/ 50 + 1} · ${rows.length} سجل',
+                    style: const TextStyle(color: muted, fontSize: 12),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'الصفحة السابقة',
+                  onPressed: loading || state.offset == 0
+                      ? null
+                      : widget.cubit.prevPage,
+                  icon: const Icon(Icons.chevron_left),
+                ),
+                IconButton(
+                  tooltip: 'الصفحة التالية',
+                  onPressed: loading || rows.length < 50
+                      ? null
+                      : widget.cubit.nextPage,
+                  icon: const Icon(Icons.chevron_right),
+                ),
+              ],
             ),
           ],
-        ),
-      ],
+        );
+      },
     );
   }
 }
@@ -984,7 +976,7 @@ class _TraderDialogState extends State<TraderDialog> {
                   icon: const Icon(Icons.image_outlined),
                   label: Text(
                     _logoPath == null
-                        ? 'Ø§Ø®ØªÙŠØ§Ø± Ø´Ø¹Ø§Ø± Ø§Ù„Ø´Ø±ÙƒØ©'
+                        ? 'اختيار شعار الشركة'
                         : _logoPath!.split(RegExp(r'[\\/]')).last,
                   ),
                 ),

@@ -23,6 +23,7 @@ class ClientDetailScreen extends StatefulWidget {
 }
 
 class _ClientDetailScreenState extends State<ClientDetailScreen> {
+  final _loadCancellation = ApiRequestCancellation();
   Map<String, dynamic>? _client;
   List<Map<String, dynamic>> _entries = [];
   bool _loading = true;
@@ -37,6 +38,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
 
   @override
   void dispose() {
+    _loadCancellation.cancel();
     _horizontal.dispose();
     super.dispose();
   }
@@ -47,7 +49,11 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
       _error = null;
     });
     try {
-      final data = await widget.api.clientLedger(widget.tenantId, widget.clientId);
+      final data = await widget.api.clientLedger(
+        widget.tenantId,
+        widget.clientId,
+        cancellation: _loadCancellation,
+      );
       if (!mounted) return;
       setState(() {
         _client = data['client'] as Map<String, dynamic>;

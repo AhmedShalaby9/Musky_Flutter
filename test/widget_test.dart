@@ -133,6 +133,29 @@ class FakeApi implements MuskyApi {
     };
   }
 
+  @override
+  Future<Map<String, dynamic>> requestWithCancellation(
+    String method,
+    String path, {
+    Map<String, dynamic>? body,
+    ApiRequestCancellation? cancellation,
+  }) => request(method, path, body);
+
+  @override
+  Future<Map<String, dynamic>> createClientReceipt(
+    int tenantId,
+    int clientId,
+    int amountMinor,
+    String method,
+    String notes,
+  ) async => {};
+
+  @override
+  Future<void> reverseClientReceipt(int tenantId, int clientId, int receiptId) async {}
+
+  @override
+  Future<Uint8List> downloadBytes(String url) async => Uint8List(0);
+
   AppUser user = const AppUser(
     id: 2,
     name: 'Ahmed',
@@ -207,7 +230,13 @@ class FakeApi implements MuskyApi {
   @override
   Future<void> deleteTenantLogo(int tenantId) async {}
   @override
-  Future<List<Map<String, dynamic>>> list(String path, {int offset = 0}) async {
+  Future<List<Map<String, dynamic>>> list(
+    String path, {
+    int offset = 0,
+    String q = '',
+    int? daysWithoutPayment,
+    ApiRequestCancellation? cancellation,
+  }) async {
     paths.add(path);
     if (listError != null) {
       throw listError!;
@@ -231,6 +260,13 @@ class FakeApi implements MuskyApi {
     }
     return clients;
   }
+
+  @override
+  Future<Map<String, dynamic>> clientLedger(
+    int tenantId,
+    int clientId, {
+    ApiRequestCancellation? cancellation,
+  }) async => {'client': clients.first, 'entries': <Map<String, dynamic>>[]};
 
   @override
   Future<void> saveClient(
