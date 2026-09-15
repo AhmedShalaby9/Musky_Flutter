@@ -811,23 +811,26 @@ class _DaysFilterButton extends StatelessWidget {
   final ValueChanged<int?> onChanged;
 
   static const _options = [3, 7, 14, 30];
+  // -1 is a sentinel for "all clients" (null), because PopupMenuButton
+  // never calls onSelected when the chosen value is null.
+  static const _allClients = -1;
 
   @override
   Widget build(BuildContext context) {
     final active = value != null;
-    return PopupMenuButton<int?>(
+    return PopupMenuButton<int>(
       tooltip: 'تصفية حسب آخر دفعة',
-      onSelected: onChanged,
+      onSelected: (v) => onChanged(v == _allClients ? null : v),
       itemBuilder: (_) => [
-        PopupMenuItem<int?>(
-          value: null,
+        PopupMenuItem<int>(
+          value: _allClients,
           child: Text(
             'كل العملاء',
             style: TextStyle(color: active ? null : teal, fontWeight: active ? null : FontWeight.w600),
           ),
         ),
         for (final d in _options)
-          PopupMenuItem<int?>(
+          PopupMenuItem<int>(
             value: d,
             child: Text(
               'لم يدفع $d أيام+',

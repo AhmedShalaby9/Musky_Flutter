@@ -88,47 +88,6 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
     if (saved == true && mounted) await _load();
   }
 
-  Future<void> _reverse(int receiptId) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('عكس الدفعة'),
-        content: const Text('هل تريد عكس هذه الدفعة؟ لا يمكن التراجع عن العكس.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('إلغاء'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.orange),
-            child: const Text('عكس'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    try {
-      await widget.api.reverseClientReceipt(widget.tenantId, widget.clientId, receiptId);
-      if (mounted) await _load();
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      if (e.status == 401) {
-        widget.onExpired();
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
-        );
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('تعذّر عكس الدفعة. حاول مجدداً.')),
-        );
-      }
-    }
-  }
-
   String _kindLabel(Map<String, dynamic> entry) {
     final kind = entry['kind'] as String? ?? '';
     switch (kind) {
@@ -293,14 +252,10 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                                     DataColumn(label: Text('الطريقة')),
                                     DataColumn(label: Text('المبلغ'), numeric: true),
                                     DataColumn(label: Text('الرصيد التراكمي'), numeric: true),
-                                    DataColumn(label: Text('')),
                                   ],
                                   rows: _entries.map((entry) {
-                                    final kind = entry['kind'] as String? ?? '';
                                     final delta = (entry['delta_minor'] as num).toInt();
                                     final running = (entry['running_balance'] as num).toInt();
-                                    final refId = entry['ref_id'];
-                                    final canReverse = kind == 'receipt' && refId != null;
                                     return DataRow(cells: [
                                       DataCell(Text(
                                         _formatAt(entry['at'] as String?),
@@ -336,19 +291,6 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                                                   : null,
                                         ),
                                       )),
-                                      DataCell(
-                                        canReverse
-                                            ? IconButton(
-                                                tooltip: 'عكس الدفعة',
-                                                icon: const Icon(
-                                                  Icons.undo,
-                                                  size: 18,
-                                                  color: Colors.orange,
-                                                ),
-                                                onPressed: () => _reverse(refId as int),
-                                              )
-                                            : const SizedBox.shrink(),
-                                      ),
                                     ]);
                                   }).toList(),
                                 ),

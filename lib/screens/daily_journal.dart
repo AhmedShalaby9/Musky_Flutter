@@ -20,7 +20,7 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
   @override
   void initState() {
     super.initState();
-    widget.cubit.loadIfNeeded();
+    widget.cubit.setDate(DateTime.now());
   }
 
   String _dateText(DateTime d) =>
