@@ -185,25 +185,30 @@ class _RecordPickerState extends State<RecordPicker> {
 }
 
 class _Line {
-  _Line(this.productId, this.title, this.pieces, int qty, int minor)
-    : quantity = TextEditingController(text: '$qty'),
+  _Line(this.productId, this.title, int units, int cartons, int minor)
+    : unitsPerPackage = TextEditingController(text: '$units'),
+      packageCount = TextEditingController(text: '$cartons'),
       price = TextEditingController(text: moneyInput(minor));
-  final int productId, pieces;
+  final int productId;
   final String title;
-  final TextEditingController quantity, price;
+  final TextEditingController unitsPerPackage, packageCount, price;
   int get total {
-    final qty = int.tryParse(quantity.text) ?? 0;
+    final units = int.tryParse(unitsPerPackage.text) ?? 0;
+    final cartons = int.tryParse(packageCount.text) ?? 0;
     final minor = parseMoney(price.text) ?? 0;
-    if (qty < 0 ||
-        qty > 1000000000 ||
-        (minor > 0 && qty > 100000000000000 ~/ minor)) {
+    if (units < 0 ||
+        cartons < 0 ||
+        units > 1000000000 ||
+        cartons > 1000000000 ||
+        (minor > 0 && units * cartons > 100000000000000 ~/ minor)) {
       return 100000000000001;
     }
-    return qty * minor;
+    return units * cartons * minor;
   }
 
   void dispose() {
-    quantity.dispose();
+    unitsPerPackage.dispose();
+    packageCount.dispose();
     price.dispose();
   }
 }
@@ -250,8 +255,8 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
           _Line(
             item['product_id'] as int,
             item['title'] as String,
-            item['pieces_per_unit'] as int,
-            item['quantity'] as int,
+            item['units_per_package'] as int? ?? item['pieces_per_unit'] as int,
+            item['package_count'] as int? ?? item['quantity'] as int,
             item['unit_price_minor'] as int,
           ),
         );
@@ -295,7 +300,8 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
         final matches = _lines.where((l) => l.productId == row['id']);
         if (matches.isNotEmpty) {
           final line = matches.first;
-          line.quantity.text = '${(int.tryParse(line.quantity.text) ?? 0) + 1}';
+          line.packageCount.text =
+              '${(int.tryParse(line.packageCount.text) ?? 0) + 1}';
         } else if (_lines.length < 100) {
           _lines.add(
             _Line(
@@ -344,7 +350,8 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
             for (final line in _lines)
               {
                 'product_id': line.productId,
-                'quantity': int.parse(line.quantity.text),
+                'units_per_package': int.parse(line.unitsPerPackage.text),
+                'package_count': int.parse(line.packageCount.text),
                 'unit_price_minor': parseMoney(line.price.text)!,
               },
           ],
@@ -388,7 +395,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'الكميات بالحزم الكاملة. الأسعار بالجنيه المصري للحزمة. المسودة لا تؤثر على المخزون.',
+                  'أدخل سعر القطعة، وعدد القطع داخل الكرتونة، وعدد الكراتين. الإجمالي = سعر القطعة × العبوة × العدد.',
                   style: TextStyle(color: muted),
                 ),
                 const SizedBox(height: 20),
@@ -448,7 +455,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                             children: [
                               Expanded(
                                 child: Text(
-                                  '${line.title} · ${line.pieces} pieces/pack',
+                                  '${line.title}',
                                   style: const TextStyle(
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -478,11 +485,11 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                               SizedBox(
                                 width: 145,
                                 child: TextFormField(
-                                  controller: line.quantity,
+                                  controller: line.unitsPerPackage,
                                   enabled: !_busy,
                                   keyboardType: TextInputType.number,
                                   decoration: const InputDecoration(
-                                    labelText: 'الكمية (حزم)',
+                                    labelText: 'العبوة (قطعة/كرتونة)',
                                   ),
                                   onChanged: (_) => setState(() {}),
                                   validator: (v) {
@@ -491,6 +498,26 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                                             qty < 1 ||
                                             qty > 1000000000
                                         ? 'أدخل قيمة من 1 إلى 1,000,000,000.'
+                                        : null;
+                                  },
+                                ),
+                              ),
+                              SizedBox(
+                                width: 145,
+                                child: TextFormField(
+                                  controller: line.packageCount,
+                                  enabled: !_busy,
+                                  keyboardType: TextInputType.number,
+                                  decoration: const InputDecoration(
+                                    labelText: 'العدد (كرتونة)',
+                                  ),
+                                  onChanged: (_) => setState(() {}),
+                                  validator: (v) {
+                                    final count = int.tryParse(v ?? '');
+                                    return count == null ||
+                                            count < 1 ||
+                                            count > 1000000000
+                                        ? 'أدخل عدد الكراتين.'
                                         : null;
                                   },
                                 ),
@@ -505,7 +532,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                                         decimal: true,
                                       ),
                                   decoration: const InputDecoration(
-                                    labelText: 'السعر / الحزمة (ج.م)',
+                                    labelText: 'سعر الوحدة / القطعة (ج.م)',
                                   ),
                                   onChanged: (_) => setState(() {}),
                                   validator: (v) => parseMoney(v ?? '') == null
@@ -768,6 +795,7 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
       context,
       MaterialPageRoute(
         builder: (_) => InvoicePdfScreen(
+          api: widget.api,
           url: url,
           title: invoiceLabel(_invoice!),
         ),
@@ -823,10 +851,10 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
                         scrollDirection: Axis.horizontal,
                         child: DataTable(
                           columns: const [
-                            DataColumn(label: Text('المنتج')),
-                            DataColumn(label: Text('الحزم')),
-                            DataColumn(label: Text('القطع/الحزمة')),
-                            DataColumn(label: Text('السعر/الحزمة')),
+                            DataColumn(label: Text('بيان')),
+                            DataColumn(label: Text('العدد')),
+                            DataColumn(label: Text('العبوة')),
+                            DataColumn(label: Text('سعر الوحدة')),
                             DataColumn(label: Text('الإجمالي')),
                           ],
                           rows: [
@@ -834,8 +862,16 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
                               DataRow(
                                 cells: [
                                   DataCell(Text('${item['title']}')),
-                                  DataCell(Text('${item['quantity']}')),
-                                  DataCell(Text('${item['pieces_per_unit']}')),
+                                  DataCell(
+                                    Text(
+                                      '${item['package_count'] ?? item['quantity']}',
+                                    ),
+                                  ),
+                                  DataCell(
+                                    Text(
+                                      '${item['units_per_package'] ?? item['pieces_per_unit']}',
+                                    ),
+                                  ),
                                   DataCell(
                                     Text(egp(item['unit_price_minor'] as int)),
                                   ),
@@ -887,9 +923,11 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
         OutlinedButton.icon(
           onPressed: _busy || _invoice == null ? null : _generatePdf,
           icon: const Icon(Icons.picture_as_pdf_outlined),
-          label: Text(_invoice != null && '${_invoice!['pdf_url']}'.isNotEmpty
-              ? 'تحديث PDF'
-              : 'إنشاء PDF'),
+          label: Text(
+            _invoice != null && '${_invoice!['pdf_url']}'.isNotEmpty
+                ? 'تحديث PDF'
+                : 'إنشاء PDF',
+          ),
         ),
         TextButton(
           onPressed: _busy ? null : () => Navigator.pop(context),

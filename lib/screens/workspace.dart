@@ -6,6 +6,7 @@ import '../core/theme.dart';
 import 'records.dart';
 import 'commerce.dart';
 import 'financial_overview.dart';
+import 'daily_journal.dart';
 
 class Workspace extends StatefulWidget {
   const Workspace({
@@ -199,6 +200,11 @@ class _WorkspaceState extends State<Workspace> {
                             enabled: _tenantId != null,
                           ),
                           nav(
+                            'دفتر اليومية',
+                            Icons.menu_book_outlined,
+                            enabled: _tenantId != null,
+                          ),
+                          nav(
                             'الفريق',
                             Icons.badge_outlined,
                             enabled: _tenantId != null,
@@ -315,6 +321,12 @@ class _WorkspaceState extends State<Workspace> {
                           api: widget.api,
                           tenantId: _tenantId!,
                           products: _section == 'المنتجات',
+                          onExpired: _expired,
+                        ),
+                        'دفتر اليومية' => DailyJournalScreen(
+                          key: ValueKey('journal:$_tenantId'),
+                          api: widget.api,
+                          tenantId: _tenantId!,
                           onExpired: _expired,
                         ),
                         'العملاء' || 'الفريق' || 'الأعمال' => RecordsScreen(

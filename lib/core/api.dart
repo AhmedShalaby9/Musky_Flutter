@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 class ApiException implements Exception {
   const ApiException(this.message, [this.status]);
@@ -75,6 +76,7 @@ abstract class MuskyApi {
   Future<Map<String, dynamic>> createClientReceipt(int tenantId, int clientId, int amountMinor, String method, String notes);
   Future<void> reverseClientReceipt(int tenantId, int clientId, int receiptId);
   Future<Map<String, dynamic>> clientLedger(int tenantId, int clientId);
+  Future<Uint8List> downloadBytes(String url);
   void clearSession();
   void dispose();
 }
@@ -410,6 +412,39 @@ class HttpMuskyApi implements MuskyApi {
   @override
   Future<Map<String, dynamic>> clientLedger(int tenantId, int clientId) =>
       _request('GET', 'tenants/$tenantId/clients/$clientId/ledger');
+
+  @override
+  Future<Uint8List> downloadBytes(String url) async {
+    final client = HttpClient();
+    client.connectionTimeout = const Duration(seconds: 15);
+    client.findProxy = (uri) => 'DIRECT';
+    client.badCertificateCallback = (cert, host, port) => true;
+    try {
+      final request = await client.getUrl(Uri.parse(url));
+      request.followRedirects = true;
+      if (_token != null) {
+        request.headers.set('Authorization', 'Bearer $_token');
+      }
+      final response = await request.close().timeout(const Duration(seconds: 30));
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw ApiException('فشل تحميل الملف (${response.statusCode})', response.statusCode);
+      }
+      final builder = BytesBuilder();
+      await for (final chunk in response) {
+        builder.add(chunk);
+        if (builder.length > 20 * 1024 * 1024) {
+          throw const ApiException('حجم الملف كبير جداً');
+        }
+      }
+      return builder.toBytes();
+    } on ApiException {
+      rethrow;
+    } on SocketException {
+      throw const ApiException('تعذّر الاتصال بالخادم.');
+    } finally {
+      client.close(force: true);
+    }
+  }
 
   @override
   void clearSession() {

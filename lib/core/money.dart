@@ -26,5 +26,5 @@ String egp(int minor) {
 }
 
 String invoiceLabel(Map<String, dynamic> invoice) => invoice['number'] == null
-    ? 'Draft #${invoice['id']}'
-    : 'INV-${invoice['number'].toString().padLeft(6, '0')}';
+    ? 'مسودة'
+    : 'إذن صادر ${invoice['number'].toString().padLeft(6, '0')}';
