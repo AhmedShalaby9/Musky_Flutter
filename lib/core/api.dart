@@ -16,7 +16,9 @@ class ApiException implements Exception {
 class ApiRequestCancellation {
   bool _cancelled = false;
   bool get isCancelled => _cancelled;
-  void cancel() { _cancelled = true; }
+  void cancel() {
+    _cancelled = true;
+  }
 }
 
 class ApiRequestCancelled implements Exception {
@@ -76,7 +78,13 @@ abstract class MuskyApi {
   Future<AppUser> currentUser();
   Future<void> logout();
   Future<void> changePassword(String current, String next);
-  Future<List<Map<String, dynamic>>> list(String path, {int offset = 0, String q = '', int? daysWithoutPayment, ApiRequestCancellation? cancellation});
+  Future<List<Map<String, dynamic>>> list(
+    String path, {
+    int offset = 0,
+    String q = '',
+    int? daysWithoutPayment,
+    ApiRequestCancellation? cancellation,
+  });
   Future<void> saveClient(int tenantId, Map<String, dynamic> data, {int? id});
   Future<Map<String, dynamic>> recordPayment(
     int tenantId,
@@ -93,8 +101,24 @@ abstract class MuskyApi {
   );
   Future<Map<String, dynamic>> uploadTenantLogo(int tenantId, String path);
   Future<void> deleteTenantLogo(int tenantId);
-  Future<Map<String, dynamic>> createClientReceipt(int tenantId, int clientId, int amountMinor, String method, String notes);
-  Future<Map<String, dynamic>> clientLedger(int tenantId, int clientId, {ApiRequestCancellation? cancellation});
+  Future<Map<String, dynamic>> createClientReceipt(
+    int tenantId,
+    int clientId,
+    int amountMinor,
+    String method,
+    String notes,
+  );
+  Future<Map<String, dynamic>> clientLedger(
+    int tenantId,
+    int clientId, {
+    ApiRequestCancellation? cancellation,
+  });
+  Future<Uint8List> clientStatementPdf(
+    int tenantId,
+    int clientId,
+    DateTime from,
+    DateTime to,
+  );
   Future<Uint8List> downloadBytes(String url);
   void clearCache();
   void clearSession();
@@ -129,6 +153,7 @@ class HttpMuskyApi implements MuskyApi {
     c.badCertificateCallback = (cert, host, port) => true;
     return c;
   }
+
   @override
   String get address => _base.toString();
 
@@ -145,12 +170,8 @@ class HttpMuskyApi implements MuskyApi {
     String path, {
     Map<String, dynamic>? body,
     ApiRequestCancellation? cancellation,
-  }) => _requestWithCancellation(
-    method,
-    path,
-    body,
-    cancellation: cancellation,
-  );
+  }) =>
+      _requestWithCancellation(method, path, body, cancellation: cancellation);
 
   Future<Map<String, dynamic>> _request(
     String method,
@@ -169,16 +190,18 @@ class HttpMuskyApi implements MuskyApi {
     String method,
     String path,
     Map<String, dynamic>? body,
-    bool retry,
-    {ApiRequestCancellation? cancellation}
-  ) async {
+    bool retry, {
+    ApiRequestCancellation? cancellation,
+  }) async {
     if (cancellation?.isCancelled ?? false) {
       throw const ApiRequestCancelled();
     }
     final client = _httpClient;
     try {
       return await (() async {
-        final url = Uri.parse('${address.replaceAll(RegExp(r'/+$'), '')}/$path');
+        final url = Uri.parse(
+          '${address.replaceAll(RegExp(r'/+$'), '')}/$path',
+        );
         print('[HTTP] --> $method $url');
         final request = await client.openUrl(method, url);
         request.followRedirects = false;
@@ -225,7 +248,8 @@ class HttpMuskyApi implements MuskyApi {
       if (cancellation?.isCancelled ?? false) {
         throw const ApiRequestCancelled();
       }
-      if (retry) return _attempt(method, path, body, false, cancellation: cancellation);
+      if (retry)
+        return _attempt(method, path, body, false, cancellation: cancellation);
       throw const ApiException(
         'The connection timed out. Check your server and try again.',
       );
@@ -234,7 +258,8 @@ class HttpMuskyApi implements MuskyApi {
       if (cancellation?.isCancelled ?? false) {
         throw const ApiRequestCancelled();
       }
-      if (retry) return _attempt(method, path, body, false, cancellation: cancellation);
+      if (retry)
+        return _attempt(method, path, body, false, cancellation: cancellation);
       throw const ApiException(
         'Cannot connect to Musky. Check that your server is running.',
       );
@@ -243,7 +268,8 @@ class HttpMuskyApi implements MuskyApi {
       if (cancellation?.isCancelled ?? false) {
         throw const ApiRequestCancelled();
       }
-      if (retry) return _attempt(method, path, body, false, cancellation: cancellation);
+      if (retry)
+        return _attempt(method, path, body, false, cancellation: cancellation);
       throw const ApiException(
         'The server security certificate could not be verified.',
       );
@@ -313,13 +339,25 @@ class HttpMuskyApi implements MuskyApi {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> list(String path, {int offset = 0, String q = '', int? daysWithoutPayment, ApiRequestCancellation? cancellation}) async {
+  Future<List<Map<String, dynamic>>> list(
+    String path, {
+    int offset = 0,
+    String q = '',
+    int? daysWithoutPayment,
+    ApiRequestCancellation? cancellation,
+  }) async {
     var url = '$path?limit=50&offset=$offset';
     if (q.isNotEmpty) url += '&q=${Uri.encodeQueryComponent(q)}';
-    if (daysWithoutPayment != null) url += '&days_without_payment=$daysWithoutPayment';
+    if (daysWithoutPayment != null)
+      url += '&days_without_payment=$daysWithoutPayment';
     final data = cancellation == null
         ? await _request('GET', url)
-        : await _requestWithCancellation('GET', url, null, cancellation: cancellation);
+        : await _requestWithCancellation(
+            'GET',
+            url,
+            null,
+            cancellation: cancellation,
+          );
     try {
       return (data['data'] as List).cast<Map<String, dynamic>>();
     } catch (_) {
@@ -461,13 +499,74 @@ class HttpMuskyApi implements MuskyApi {
   });
 
   @override
-  Future<Map<String, dynamic>> clientLedger(int tenantId, int clientId, {ApiRequestCancellation? cancellation}) =>
-      _requestWithCancellation(
-        'GET',
-        'tenants/$tenantId/clients/$clientId/ledger',
-        null,
-        cancellation: cancellation,
+  Future<Map<String, dynamic>> clientLedger(
+    int tenantId,
+    int clientId, {
+    ApiRequestCancellation? cancellation,
+  }) => _requestWithCancellation(
+    'GET',
+    'tenants/$tenantId/clients/$clientId/ledger',
+    null,
+    cancellation: cancellation,
+  );
+
+  @override
+  Future<Uint8List> clientStatementPdf(
+    int tenantId,
+    int clientId,
+    DateTime from,
+    DateTime to,
+  ) {
+    String fmt(DateTime d) =>
+        '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    return _downloadApiBytes(
+      'tenants/$tenantId/clients/$clientId/statement.pdf?from=${fmt(from)}&to=${fmt(to)}',
+    );
+  }
+
+  Future<Uint8List> _downloadApiBytes(String path) async {
+    final client = _httpClient;
+    try {
+      final url = Uri.parse('${address.replaceAll(RegExp(r'/+$'), '')}/$path');
+      print('[HTTP] --> GET $url');
+      final request = await client.getUrl(url);
+      request.followRedirects = false;
+      if (_token != null) {
+        request.headers.set('Authorization', 'Bearer $_token');
+      }
+      final response = await request.close().timeout(
+        const Duration(seconds: 30),
       );
+      print('[HTTP] <-- ${response.statusCode} GET $url');
+      final builder = BytesBuilder();
+      await for (final chunk in response) {
+        builder.add(chunk);
+        if (builder.length > 20 * 1024 * 1024) {
+          throw const ApiException('حجم الملف كبير جداً');
+        }
+      }
+      final bytes = builder.toBytes();
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        var message = 'تعذّر تحميل الملف.';
+        try {
+          final decoded = jsonDecode(utf8.decode(bytes));
+          if (decoded is Map<String, dynamic> && decoded['error'] is String) {
+            message = decoded['error'] as String;
+          }
+        } catch (_) {}
+        throw ApiException(message, response.statusCode);
+      }
+      return bytes;
+    } on TimeoutException {
+      throw const ApiException(
+        'The connection timed out. Check your server and try again.',
+      );
+    } on SocketException {
+      throw const ApiException(
+        'Cannot connect to Musky. Check that your server is running.',
+      );
+    }
+  }
 
   @override
   Future<Uint8List> downloadBytes(String url) async {
@@ -481,9 +580,14 @@ class HttpMuskyApi implements MuskyApi {
       if (_token != null) {
         request.headers.set('Authorization', 'Bearer $_token');
       }
-      final response = await request.close().timeout(const Duration(seconds: 30));
+      final response = await request.close().timeout(
+        const Duration(seconds: 30),
+      );
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw ApiException('فشل تحميل الملف (${response.statusCode})', response.statusCode);
+        throw ApiException(
+          'فشل تحميل الملف (${response.statusCode})',
+          response.statusCode,
+        );
       }
       final builder = BytesBuilder();
       await for (final chunk in response) {

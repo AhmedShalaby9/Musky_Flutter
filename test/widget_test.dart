@@ -294,6 +294,14 @@ class FakeApi implements MuskyApi {
   }) async => {'client': clients.first, 'entries': <Map<String, dynamic>>[]};
 
   @override
+  Future<Uint8List> clientStatementPdf(
+    int tenantId,
+    int clientId,
+    DateTime from,
+    DateTime to,
+  ) async => Uint8List.fromList([0x25, 0x50, 0x44, 0x46, 0x2d]);
+
+  @override
   Future<void> saveClient(
     int tenantId,
     Map<String, dynamic> data, {

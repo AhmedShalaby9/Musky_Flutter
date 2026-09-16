@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -123,6 +124,62 @@ class _RecordsScreenState extends State<RecordsScreen> {
     } catch (_) {}
   }
 
+  Future<void> _statement(Map<String, dynamic> client) async {
+    final period = await showDialog<({DateTime from, DateTime to})>(
+      context: context,
+      builder: (_) => const StatementPeriodSheet(),
+    );
+    if (period == null || !mounted) return;
+    try {
+      final bytes = await widget.api.clientStatementPdf(
+        widget.tenantId!,
+        client['id'] as int,
+        period.from,
+        period.to,
+      );
+      if (bytes.length < 4 ||
+          bytes[0] != 0x25 ||
+          bytes[1] != 0x50 ||
+          bytes[2] != 0x44 ||
+          bytes[3] != 0x46) {
+        throw const ApiException('الملف المستلم ليس PDF صحيحاً.');
+      }
+      final name = '${client['name']}'.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+      String fmt(DateTime d) =>
+          '${d.year}${d.month.toString().padLeft(2, '0')}${d.day.toString().padLeft(2, '0')}';
+      final location = await getSaveLocation(
+        suggestedName:
+            'كشف حساب $name ${fmt(period.from)}-${fmt(period.to)}.pdf',
+        acceptedTypeGroups: [
+          const XTypeGroup(label: 'PDF', extensions: ['pdf']),
+        ],
+      );
+      if (location == null || !mounted) return;
+      await File(location.path).writeAsBytes(bytes, flush: true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('تم حفظ كشف الحساب: ${location.path}'),
+          backgroundColor: teal,
+        ),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      if (e.status == 401) {
+        widget.onExpired();
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('تعذّر إنشاء كشف الحساب: $e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<RecordsCubit, RecordsState>(
@@ -180,9 +237,12 @@ class _RecordsScreenState extends State<RecordsScreen> {
                     controller: _search,
                     onChanged: (_) {
                       _searchTimer?.cancel();
-                      _searchTimer = Timer(const Duration(milliseconds: 400), () {
-                        widget.cubit.search(_search.text.trim());
-                      });
+                      _searchTimer = Timer(
+                        const Duration(milliseconds: 400),
+                        () {
+                          widget.cubit.search(_search.text.trim());
+                        },
+                      );
                     },
                     decoration: const InputDecoration(
                       hintText: 'بحث في جميع السجلات',
@@ -283,8 +343,9 @@ class _RecordsScreenState extends State<RecordsScreen> {
                             controller: _horizontal,
                             scrollDirection: Axis.horizontal,
                             child: ConstrainedBox(
-                              constraints:
-                                  BoxConstraints(minWidth: size.maxWidth),
+                              constraints: BoxConstraints(
+                                minWidth: size.maxWidth,
+                              ),
                               child: SingleChildScrollView(
                                 child: DataTable(
                                   headingRowColor: WidgetStateProperty.all(
@@ -327,8 +388,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                                 width: 180,
                                                 child: _clients
                                                     ? TextButton(
-                                                        style:
-                                                            TextButton.styleFrom(
+                                                        style: TextButton.styleFrom(
                                                           padding:
                                                               EdgeInsets.zero,
                                                           alignment:
@@ -339,20 +399,17 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                                           await Navigator.push(
                                                             context,
                                                             MaterialPageRoute(
-                                                              builder: (_) =>
-                                                                  ClientDetailScreen(
+                                                              builder: (_) => ClientDetailScreen(
                                                                 api: widget.api,
-                                                                tenantId:
-                                                                    widget
-                                                                        .tenantId!,
+                                                                tenantId: widget
+                                                                    .tenantId!,
                                                                 clientId:
                                                                     row['id']
                                                                         as int,
                                                                 clientName:
                                                                     '${row['name']}',
-                                                                onExpired:
-                                                                    widget
-                                                                        .onExpired,
+                                                                onExpired: widget
+                                                                    .onExpired,
                                                               ),
                                                             ),
                                                           );
@@ -366,10 +423,12 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                                           maxLines: 1,
                                                           overflow: TextOverflow
                                                               .ellipsis,
-                                                          style: const TextStyle(
-                                                            fontWeight:
-                                                                FontWeight.w500,
-                                                          ),
+                                                          style:
+                                                              const TextStyle(
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w500,
+                                                              ),
                                                         ),
                                                       )
                                                     : Text(
@@ -430,9 +489,9 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                               Container(
                                                 padding:
                                                     const EdgeInsets.symmetric(
-                                                  horizontal: 10,
-                                                  vertical: 4,
-                                                ),
+                                                      horizontal: 10,
+                                                      vertical: 4,
+                                                    ),
                                                 decoration: BoxDecoration(
                                                   color: row['active'] == true
                                                       ? const Color(0xFFEAF2E4)
@@ -448,10 +507,9 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                                       : 'غير نشط',
                                                   style: TextStyle(
                                                     fontSize: 12,
-                                                    color:
-                                                        row['active'] == true
-                                                            ? teal
-                                                            : muted,
+                                                    color: row['active'] == true
+                                                        ? teal
+                                                        : muted,
                                                   ),
                                                 ),
                                               ),
@@ -462,8 +520,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                                   mainAxisSize:
                                                       MainAxisSize.min,
                                                   children: [
-                                                    IconButton(
-                                                      tooltip: 'تسجيل دفعة',
+                                                    TextButton.icon(
                                                       onPressed: () async {
                                                         final balanceMinor =
                                                             (row['balance_minor']
@@ -475,8 +532,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                                               bool
                                                             >(
                                                               context: context,
-                                                              builder: (_) =>
-                                                                  ReceiptDialog(
+                                                              builder: (_) => ReceiptDialog(
                                                                 api: widget.api,
                                                                 tenantId: widget
                                                                     .tenantId!,
@@ -485,9 +541,8 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                                                         as int,
                                                                 balanceMinor:
                                                                     balanceMinor,
-                                                                onExpired:
-                                                                    widget
-                                                                        .onExpired,
+                                                                onExpired: widget
+                                                                    .onExpired,
                                                               ),
                                                             );
                                                         if (saved == true &&
@@ -498,25 +553,37 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                                       },
                                                       icon: const Icon(
                                                         Icons.payments_outlined,
-                                                        size: 19,
+                                                        size: 18,
                                                         color: teal,
                                                       ),
+                                                      label: const Text(
+                                                        'تسجيل دفعة',
+                                                      ),
                                                     ),
-                                                    IconButton(
-                                                      tooltip:
-                                                          'تعديل ${row['name']}',
+                                                    TextButton.icon(
+                                                      onPressed: () =>
+                                                          _statement(row),
+                                                      icon: const Icon(
+                                                        Icons
+                                                            .description_outlined,
+                                                        size: 18,
+                                                      ),
+                                                      label: const Text(
+                                                        'كشف حساب',
+                                                      ),
+                                                    ),
+                                                    TextButton.icon(
                                                       onPressed: () =>
                                                           _edit(row),
                                                       icon: const Icon(
                                                         Icons.edit_outlined,
-                                                        size: 19,
+                                                        size: 18,
+                                                      ),
+                                                      label: const Text(
+                                                        'تعديل',
                                                       ),
                                                     ),
-                                                    IconButton(
-                                                      tooltip:
-                                                          row['active'] == true
-                                                              ? 'أرشفة ${row['name']}'
-                                                              : 'استعادة ${row['name']}',
+                                                    TextButton.icon(
                                                       onPressed: () =>
                                                           _toggle(row),
                                                       icon: Icon(
@@ -525,19 +592,23 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                                                   .archive_outlined
                                                             : Icons
                                                                   .unarchive_outlined,
-                                                        size: 19,
+                                                        size: 18,
+                                                      ),
+                                                      label: Text(
+                                                        row['active'] == true
+                                                            ? 'أرشفة'
+                                                            : 'استعادة',
                                                       ),
                                                     ),
-                                                    IconButton(
-                                                      tooltip:
-                                                          'حذف ${row['name']}',
+                                                    TextButton.icon(
                                                       onPressed: () =>
                                                           _delete(row),
                                                       icon: const Icon(
                                                         Icons.delete_outline,
-                                                        size: 19,
+                                                        size: 18,
                                                         color: Colors.red,
                                                       ),
+                                                      label: const Text('حذف'),
                                                     ),
                                                   ],
                                                 ),
@@ -547,11 +618,9 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                                 TextButton(
                                                   onPressed:
                                                       row['active'] == true
-                                                          ? () =>
-                                                              widget.onTenant(
-                                                                row,
-                                                              )
-                                                          : null,
+                                                      ? () =>
+                                                            widget.onTenant(row)
+                                                      : null,
                                                   child: const Text(
                                                     'فتح مساحة العمل',
                                                   ),
@@ -601,6 +670,92 @@ class _RecordsScreenState extends State<RecordsScreen> {
   }
 }
 
+class StatementPeriodSheet extends StatefulWidget {
+  const StatementPeriodSheet({super.key});
+
+  @override
+  State<StatementPeriodSheet> createState() => _StatementPeriodSheetState();
+}
+
+class _StatementPeriodSheetState extends State<StatementPeriodSheet> {
+  late DateTime _from;
+  late DateTime _to;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _from = DateTime(now.year, now.month, 1);
+    _to = DateTime(now.year, now.month, now.day);
+  }
+
+  String _text(DateTime date) =>
+      '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+
+  Future<void> _pick({required bool from}) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: from ? _from : _to,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      if (from) {
+        _from = picked;
+        if (_to.isBefore(_from)) _to = _from;
+      } else {
+        _to = picked;
+        if (_from.isAfter(_to)) _from = _to;
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('كشف حساب'),
+    content: SizedBox(
+      width: 420,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.calendar_today_outlined),
+            title: const Text('من تاريخ'),
+            subtitle: Text(_text(_from)),
+            onTap: () => _pick(from: true),
+          ),
+          const Divider(height: 1),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.event_outlined),
+            title: const Text('إلى تاريخ'),
+            subtitle: Text(_text(_to)),
+            onTap: () => _pick(from: false),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'سيتم إنشاء ملف PDF يحتوي على الفواتير والدفعات ورصيد العميل خلال الفترة.',
+            style: TextStyle(color: muted, fontSize: 12),
+          ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('إلغاء'),
+      ),
+      FilledButton.icon(
+        onPressed: () => Navigator.pop(context, (from: _from, to: _to)),
+        icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+        label: const Text('إنشاء الملف'),
+      ),
+    ],
+  );
+}
+
 class ClientDialog extends StatefulWidget {
   const ClientDialog({
     super.key,
@@ -638,7 +793,9 @@ class _ClientDialogState extends State<ClientDialog> {
     final abs = v.abs();
     final major = abs ~/ 100;
     final cents = abs % 100;
-    final str = cents == 0 ? '$major' : '$major.${cents.toString().padLeft(2, '0')}';
+    final str = cents == 0
+        ? '$major'
+        : '$major.${cents.toString().padLeft(2, '0')}';
     return v < 0 ? '-$str' : str;
   }
 
@@ -778,7 +935,8 @@ class _ClientDialogState extends State<ClientDialog> {
                       helperText: 'موجب: العميل مدين. سالب: أنت المدين.',
                     ),
                     validator: (v) {
-                      if (v != null && v.trim().isNotEmpty &&
+                      if (v != null &&
+                          v.trim().isNotEmpty &&
                           _parseBalance(v) == null) {
                         return 'أدخل رقماً صحيحاً (مثال: 150 أو -75.50).';
                       }
@@ -826,7 +984,10 @@ class _DaysFilterButton extends StatelessWidget {
           value: _allClients,
           child: Text(
             'كل العملاء',
-            style: TextStyle(color: active ? null : teal, fontWeight: active ? null : FontWeight.w600),
+            style: TextStyle(
+              color: active ? null : teal,
+              fontWeight: active ? null : FontWeight.w600,
+            ),
           ),
         ),
         for (final d in _options)
@@ -834,7 +995,10 @@ class _DaysFilterButton extends StatelessWidget {
             value: d,
             child: Text(
               'لم يدفع $d أيام+',
-              style: TextStyle(color: value == d ? teal : null, fontWeight: value == d ? FontWeight.w600 : null),
+              style: TextStyle(
+                color: value == d ? teal : null,
+                fontWeight: value == d ? FontWeight.w600 : null,
+              ),
             ),
           ),
       ],
@@ -848,7 +1012,11 @@ class _DaysFilterButton extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.calendar_today_outlined, size: 15, color: active ? teal : muted),
+            Icon(
+              Icons.calendar_today_outlined,
+              size: 15,
+              color: active ? teal : muted,
+            ),
             const SizedBox(width: 6),
             Text(
               active ? 'لم يدفع $value أيام+' : 'آخر دفعة',
