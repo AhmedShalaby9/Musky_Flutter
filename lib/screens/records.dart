@@ -38,6 +38,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
   Timer? _searchTimer;
   bool get _clients => widget.section == 'العملاء';
   bool get _businesses => widget.section == 'الأعمال';
+  bool get _team => widget.section == 'الفريق';
 
   @override
   void initState() {
@@ -180,6 +181,51 @@ class _RecordsScreenState extends State<RecordsScreen> {
     }
   }
 
+  Future<void> _addAdmin() async {
+    final data = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (_) => const AddAdminDialog(),
+    );
+    if (data == null || !mounted) return;
+    try {
+      await widget.api.request('POST', 'tenants/${widget.tenantId}/users', {
+        'name': data['name'],
+        'email': data['email'],
+        'password': data['password'],
+        'role': 'admin',
+      });
+      widget.cubit.refresh();
+    } on ApiException catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+    }
+  }
+
+  Future<void> _changeTraderPassword(Map<String, dynamic> user) async {
+    final password = await showDialog<String>(
+      context: context,
+      builder: (_) => const TraderPasswordDialog(),
+    );
+    if (password == null || !mounted) return;
+    try {
+      await widget.api.request(
+        'PATCH',
+        'tenants/${widget.tenantId}/users/${user['id']}',
+        {'password': password},
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم تغيير كلمة مرور التاجر.')),
+      );
+    } on ApiException catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<RecordsCubit, RecordsState>(
@@ -226,6 +272,12 @@ class _RecordsScreenState extends State<RecordsScreen> {
                     onPressed: loading ? null : _addTrader,
                     icon: const Icon(Icons.add, size: 19),
                     label: const Text('إضافة تاجر'),
+                  ),
+                if (_team && widget.user.isSuperAdmin)
+                  FilledButton.icon(
+                    onPressed: loading ? null : _addAdmin,
+                    icon: const Icon(Icons.person_add_outlined, size: 19),
+                    label: const Text('إضافة مدير'),
                   ),
               ],
             ),
@@ -374,7 +426,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                     if (!_clients && !_businesses)
                                       const DataColumn(label: Text('الدور')),
                                     const DataColumn(label: Text('الحالة')),
-                                    if (_clients || _businesses)
+                                    if (_clients || _businesses || _team)
                                       const DataColumn(
                                         label: Text('الإجراءات'),
                                       ),
@@ -626,6 +678,30 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                                   ),
                                                 ),
                                               ),
+                                            if (_team)
+                                              DataCell(
+                                                row['role'] == 'trader' &&
+                                                        (widget
+                                                                .user
+                                                                .isSuperAdmin ||
+                                                            widget.user.role ==
+                                                                'admin')
+                                                    ? TextButton.icon(
+                                                        onPressed: () =>
+                                                            _changeTraderPassword(
+                                                              row,
+                                                            ),
+                                                        icon: const Icon(
+                                                          Icons
+                                                              .lock_reset_outlined,
+                                                          size: 18,
+                                                        ),
+                                                        label: const Text(
+                                                          'تغيير كلمة المرور',
+                                                        ),
+                                                      )
+                                                    : const SizedBox.shrink(),
+                                              ),
                                           ],
                                         ),
                                       )
@@ -668,6 +744,144 @@ class _RecordsScreenState extends State<RecordsScreen> {
       },
     );
   }
+}
+
+class AddAdminDialog extends StatefulWidget {
+  const AddAdminDialog({super.key});
+
+  @override
+  State<AddAdminDialog> createState() => _AddAdminDialogState();
+}
+
+class _AddAdminDialogState extends State<AddAdminDialog> {
+  final _form = GlobalKey<FormState>();
+  final _name = TextEditingController();
+  final _email = TextEditingController();
+  final _password = TextEditingController();
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _email.dispose();
+    _password.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('إضافة مدير'),
+    content: SizedBox(
+      width: 420,
+      child: Form(
+        key: _form,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: _name,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'الاسم'),
+              validator: (v) =>
+                  v == null || v.trim().isEmpty ? 'أدخل الاسم.' : null,
+            ),
+            const SizedBox(height: 14),
+            TextFormField(
+              controller: _email,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(labelText: 'البريد الإلكتروني'),
+              validator: (v) =>
+                  v == null ||
+                      !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(v.trim())
+                  ? 'أدخل بريداً إلكترونياً صحيحاً.'
+                  : null,
+            ),
+            const SizedBox(height: 14),
+            TextFormField(
+              controller: _password,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'كلمة المرور'),
+              validator: (v) => v == null || v.length < 12
+                  ? 'كلمة المرور لا تقل عن 12 حرفاً.'
+                  : null,
+            ),
+          ],
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('إلغاء'),
+      ),
+      FilledButton(
+        onPressed: () {
+          if (_form.currentState!.validate()) {
+            Navigator.pop(context, {
+              'name': _name.text.trim(),
+              'email': _email.text.trim(),
+              'password': _password.text,
+            });
+          }
+        },
+        child: const Text('إنشاء'),
+      ),
+    ],
+  );
+}
+
+class TraderPasswordDialog extends StatefulWidget {
+  const TraderPasswordDialog({super.key});
+
+  @override
+  State<TraderPasswordDialog> createState() => _TraderPasswordDialogState();
+}
+
+class _TraderPasswordDialogState extends State<TraderPasswordDialog> {
+  final _form = GlobalKey<FormState>();
+  final _password = TextEditingController();
+
+  @override
+  void dispose() {
+    _password.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('تغيير كلمة مرور التاجر'),
+    content: SizedBox(
+      width: 420,
+      child: Form(
+        key: _form,
+        child: TextFormField(
+          controller: _password,
+          autofocus: true,
+          obscureText: true,
+          decoration: const InputDecoration(labelText: 'كلمة المرور الجديدة'),
+          validator: (v) => v == null || v.length < 12
+              ? 'كلمة المرور لا تقل عن 12 حرفاً.'
+              : null,
+          onFieldSubmitted: (_) {
+            if (_form.currentState!.validate())
+              Navigator.pop(context, _password.text);
+          },
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('إلغاء'),
+      ),
+      FilledButton(
+        onPressed: () {
+          if (_form.currentState!.validate())
+            Navigator.pop(context, _password.text);
+        },
+        child: const Text('حفظ'),
+      ),
+    ],
+  );
 }
 
 class StatementPeriodSheet extends StatefulWidget {
