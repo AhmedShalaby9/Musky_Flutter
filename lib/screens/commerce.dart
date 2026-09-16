@@ -8,6 +8,13 @@ import '../core/theme.dart';
 import 'invoice_editor.dart';
 import 'product_buyers.dart';
 
+String _invoiceStatusLabel(String status) => switch (status) {
+  'draft' => 'مُسودة',
+  'posted' => 'صادرة',
+  'void' || 'cancelled' => 'ملغاة',
+  _ => status,
+};
+
 class CommerceScreen extends StatefulWidget {
   const CommerceScreen({
     super.key,
@@ -227,7 +234,9 @@ class _CommerceScreenState extends State<CommerceScreen> {
                             DropdownMenuItem(
                               value: status,
                               child: Text(
-                                status.isEmpty ? 'جميع الفواتير' : status,
+                                status.isEmpty
+                                    ? 'جميع الفواتير'
+                                    : _invoiceStatusLabel(status),
                               ),
                             ),
                         ],
@@ -441,7 +450,11 @@ class _CommerceScreenState extends State<CommerceScreen> {
                                                   ),
                                                 ),
                                                 DataCell(
-                                                  Text('${row['status']}'),
+                                                  Text(
+                                                    _invoiceStatusLabel(
+                                                      '${row['status']}',
+                                                    ),
+                                                  ),
                                                 ),
                                                 DataCell(
                                                   TextButton(

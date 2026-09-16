@@ -685,11 +685,17 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
         context: context,
         builder: (dialogContext) => AlertDialog(
           title: Text(
-            action == 'post' ? 'Post this invoice?' : 'Cancel this draft?',
+            action == 'post'
+                ? 'Post this invoice?'
+                : action == 'reactivate'
+                ? 'Reactivate this invoice?'
+                : 'Cancel this draft?',
           ),
           content: Text(
             action == 'post'
                 ? 'This deducts the listed packs from stock and records ${egp(_invoice!['total_minor'] as int)} owed by ${_invoice!['client_name']}. Posted invoices cannot be edited.'
+                : action == 'reactivate'
+                ? 'This restores the invoice to active status and applies its stock and balance calculations again.'
                 : 'This keeps the draft as cancelled. Stock and balances will not change.',
           ),
           actions: [
@@ -700,7 +706,11 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
             FilledButton(
               onPressed: () => Navigator.pop(dialogContext, true),
               child: Text(
-                action == 'post' ? 'Confirm posting' : 'Confirm cancellation',
+                action == 'post'
+                    ? 'Confirm posting'
+                    : action == 'reactivate'
+                    ? 'Confirm reactivation'
+                    : 'Confirm cancellation',
               ),
             ),
           ],
@@ -719,7 +729,7 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
         action == 'cancel' ? 'DELETE' : 'POST',
         action == 'cancel'
             ? '$_path?version=${_invoice!['version']}'
-            : '$_path/$action',
+            : '$_path/${action == 'reactivate' ? 'reactivate' : action}',
         action == 'cancel'
             ? null
             : {'version': _invoice!['version'], 'reason': ?reason},
@@ -966,6 +976,11 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
           FilledButton(
             onPressed: _busy ? null : _payment,
             child: const Text('تسجيل دفعة'),
+          ),
+        if (_invoice?['status'] == 'void' || _invoice?['status'] == 'cancelled')
+          OutlinedButton(
+            onPressed: _busy ? null : () => _transition('reactivate'),
+            child: const Text('إعادة تفعيل الفاتورة'),
           ),
         if (_invoice?['status'] == 'posted')
           OutlinedButton(
