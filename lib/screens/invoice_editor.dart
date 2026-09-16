@@ -90,12 +90,43 @@ class _RecordPickerState extends State<RecordPicker> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: Text(widget.products ? 'اختر منتجاً' : 'اختر عميلاً'),
+    title: Row(
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: teal.withValues(alpha: .10),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            widget.products
+                ? Icons.inventory_2_outlined
+                : Icons.person_search_outlined,
+            color: teal,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            widget.products ? 'إضافة منتج للفاتورة' : 'اختيار العميل',
+          ),
+        ),
+      ],
+    ),
     content: SizedBox(
-      width: 560,
-      height: 400,
+      width: 720,
+      height: 500,
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text(
+            widget.products
+                ? 'ابحث عن الصنف ثم أضفه إلى بنود الفاتورة.'
+                : 'اختر العميل الذي ستُسجّل الفاتورة باسمه.',
+            style: const TextStyle(color: muted),
+          ),
+          const SizedBox(height: 16),
           TextField(
             controller: _search,
             autofocus: true,
@@ -131,20 +162,80 @@ class _RecordPickerState extends State<RecordPicker> {
                 : _rows.isEmpty
                 ? const Center(child: Text('لا توجد سجلات نشطة مطابقة.'))
                 : ListView.separated(
+                    padding: const EdgeInsets.only(bottom: 8),
                     itemCount: _rows.length,
-                    separatorBuilder: (_, index) => const Divider(height: 1),
+                    separatorBuilder: (_, index) => const SizedBox(height: 8),
                     itemBuilder: (context, index) {
                       final row = _rows[index];
-                      return ListTile(
-                        title: Text(
-                          '${row[widget.products ? 'title' : 'name']}',
+                      final title =
+                          '${row[widget.products ? 'title' : 'name']}';
+                      final secondary = widget.products
+                          ? 'الكود: ${row['code']} · المتاح: ${row['quantity']} حزمة'
+                          : '${row['phone'] ?? 'لا يوجد هاتف'}${'${row['address'] ?? ''}'.isEmpty ? '' : ' · ${row['address']}'}';
+                      return Material(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () => Navigator.pop(context, row),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 14,
+                            ),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: line),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              children: [
+                                CircleAvatar(
+                                  backgroundColor: teal.withValues(alpha: .10),
+                                  foregroundColor: teal,
+                                  child: Icon(
+                                    widget.products
+                                        ? Icons.inventory_2_outlined
+                                        : Icons.person_outline,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        title,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        secondary,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(color: muted),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                TextButton.icon(
+                                  onPressed: () => Navigator.pop(context, row),
+                                  icon: Icon(
+                                    widget.products
+                                        ? Icons.add_circle_outline
+                                        : Icons.check_circle_outline,
+                                    size: 18,
+                                  ),
+                                  label: Text(
+                                    widget.products ? 'إضافة' : 'اختيار',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
-                        subtitle: Text(
-                          widget.products
-                              ? '${row['code']} · ${row['quantity']} حزمة متاحة'
-                              : '${row['phone'] ?? ''}',
-                        ),
-                        onTap: () => Navigator.pop(context, row),
                       );
                     },
                   ),
@@ -326,6 +417,22 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
     });
   }
 
+  Future<void> _pickIssueDate() async {
+    final initial = DateTime.tryParse(_date.text) ?? DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      helpText: 'اختر تاريخ الفاتورة',
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _date.text =
+          '${picked.year.toString().padLeft(4, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+    });
+  }
+
   Future<void> _save() async {
     if (_busy || !_form.currentState!.validate()) {
       return;
@@ -392,10 +499,34 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
   Widget build(BuildContext context) => PopScope(
     canPop: !_busy,
     child: AlertDialog(
-      title: Text(
-        widget.invoice == null
-            ? (_type == 'purchase' ? 'فاتورة شراء' : 'فاتورة بيع جديدة')
-            : 'تعديل المسودة',
+      title: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: (_type == 'purchase' ? const Color(0xFF536D8A) : teal)
+                  .withValues(alpha: .12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              _type == 'purchase'
+                  ? Icons.shopping_cart_outlined
+                  : Icons.receipt_long_outlined,
+              color: _type == 'purchase' ? const Color(0xFF536D8A) : teal,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              widget.invoice == null
+                  ? (_type == 'purchase'
+                        ? 'فاتورة شراء جديدة'
+                        : 'فاتورة بيع جديدة')
+                  : 'تعديل مسودة ${invoiceTypeLabel(_type)}',
+            ),
+          ),
+        ],
       ),
       content: SizedBox(
         width: 920,
@@ -406,9 +537,21 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'أدخل سعر القطعة، وعدد القطع داخل الكرتونة، وعدد الكراتين. الإجمالي = سعر القطعة × العبوة × العدد.',
-                  style: TextStyle(color: muted),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color:
+                        (_type == 'purchase' ? const Color(0xFF536D8A) : teal)
+                            .withValues(alpha: .08),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    _type == 'purchase'
+                        ? 'أضف المنتجات التي تم شراؤها. عند إصدار الفاتورة ستزداد الكمية في المخزون.'
+                        : 'أضف المنتجات المراد بيعها. عند إصدار الفاتورة ستُخصم الكمية من المخزون.',
+                    style: const TextStyle(color: ink),
+                  ),
                 ),
                 const SizedBox(height: 20),
                 if (_error != null) ...[
@@ -430,8 +573,11 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                       child: TextFormField(
                         controller: _date,
                         enabled: !_busy,
+                        readOnly: true,
+                        onTap: _busy ? null : _pickIssueDate,
                         decoration: const InputDecoration(
-                          labelText: 'تاريخ الإصدار (YYYY-MM-DD)',
+                          labelText: 'تاريخ الفاتورة',
+                          suffixIcon: Icon(Icons.calendar_today_outlined),
                         ),
                         validator: (value) {
                           final date = DateTime.tryParse(value ?? '');
@@ -450,6 +596,13 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                   ],
                 ),
                 const SizedBox(height: 24),
+                if (_lines.isNotEmpty) ...[
+                  Text(
+                    'بنود الفاتورة (${_lines.length})',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 for (final line in _lines)
                   Padding(
                     key: ValueKey(line),
@@ -457,7 +610,8 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                     child: Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: paper,
+                        color: Colors.white,
+                        border: Border.all(color: const Color(0xFFE1E7E0)),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Column(
@@ -466,11 +620,24 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                           Row(
                             children: [
                               Expanded(
-                                child: Text(
-                                  '${line.title}',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '${line.title}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    const Text(
+                                      'الكمية والسعر',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: muted,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                               IconButton(
@@ -552,10 +719,21 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                                       : null,
                                 ),
                               ),
-                              Text(
-                                egp(line.total),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 12,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFE7EFE5),
+                                  borderRadius: BorderRadius.circular(9),
+                                ),
+                                child: Text(
+                                  egp(line.total),
+                                  style: const TextStyle(
+                                    color: teal,
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
                               ),
                             ],
@@ -581,11 +759,35 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    'الإجمالي: ${egp(_lines.fold<int>(0, (sum, line) => sum + line.total))}',
-                    style: Theme.of(context).textTheme.titleLarge,
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 16,
+                  ),
+                  decoration: BoxDecoration(
+                    color: ink,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'إجمالي المسودة',
+                          style: TextStyle(color: Color(0xFFB6C9C1)),
+                        ),
+                      ),
+                      Text(
+                        egp(
+                          _lines.fold<int>(0, (sum, line) => sum + line.total),
+                        ),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 21,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -840,12 +1042,51 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
     );
   }
 
+  Widget _detailField(String label, String value) => SizedBox(
+    width: 145,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 11, color: muted)),
+        const SizedBox(height: 5),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+      ],
+    ),
+  );
+
   @override
   Widget build(BuildContext context) => PopScope(
     canPop: !_busy,
     child: AlertDialog(
       title: Row(
         children: [
+          if (_invoice != null)
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color:
+                    (_invoice!['document_type'] == 'purchase'
+                            ? const Color(0xFF536D8A)
+                            : teal)
+                        .withValues(alpha: .12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                _invoice!['document_type'] == 'purchase'
+                    ? Icons.shopping_cart_outlined
+                    : Icons.receipt_long_outlined,
+                color: _invoice!['document_type'] == 'purchase'
+                    ? const Color(0xFF536D8A)
+                    : teal,
+              ),
+            ),
+          if (_invoice != null) const SizedBox(width: 12),
           Expanded(
             child: Text(
               _invoice == null ? 'الفاتورة' : invoiceLabel(_invoice!),
@@ -872,60 +1113,115 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
                       const SizedBox(height: 16),
                     ],
                     if (_invoice != null) ...[
-                      Text(
-                        '${_invoice!['client_name']}',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      if ('${_invoice!['client_address']}'.isNotEmpty)
-                        Text('${_invoice!['client_address']}'),
-                      const SizedBox(height: 10),
-                      Text(
-                        '${_invoice!['issue_date']} · ${invoiceTypeLabel(_invoice!['document_type'])} · ${invoiceStatusLabel('${_invoice!['status']}')} · EGP',
-                        style: const TextStyle(color: muted),
-                      ),
-                      const SizedBox(height: 20),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: DataTable(
-                          columns: const [
-                            DataColumn(label: Text('بيان')),
-                            DataColumn(label: Text('العدد')),
-                            DataColumn(label: Text('العبوة')),
-                            DataColumn(label: Text('سعر الوحدة')),
-                            DataColumn(label: Text('الإجمالي')),
-                          ],
-                          rows: [
-                            for (final item in _invoice!['items'] as List)
-                              DataRow(
-                                cells: [
-                                  DataCell(Text('${item['title']}')),
-                                  DataCell(
-                                    Text(
-                                      '${item['package_count'] ?? item['quantity']}',
-                                    ),
-                                  ),
-                                  DataCell(
-                                    Text(
-                                      '${item['units_per_package'] ?? item['pieces_per_unit']}',
-                                    ),
-                                  ),
-                                  DataCell(
-                                    Text(egp(item['unit_price_minor'] as int)),
-                                  ),
-                                  DataCell(
-                                    Text(egp(item['total_minor'] as int)),
-                                  ),
-                                ],
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: paper,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Wrap(
+                          spacing: 28,
+                          runSpacing: 12,
+                          children: [
+                            _detailField(
+                              'العميل',
+                              '${_invoice!['client_name']}',
+                            ),
+                            _detailField(
+                              'التاريخ',
+                              '${_invoice!['issue_date']}',
+                            ),
+                            _detailField(
+                              'النوع',
+                              invoiceTypeLabel(_invoice!['document_type']),
+                            ),
+                            _detailField(
+                              'الحالة',
+                              invoiceStatusLabel('${_invoice!['status']}'),
+                            ),
+                            if ('${_invoice!['client_address']}'.isNotEmpty)
+                              _detailField(
+                                'العنوان',
+                                '${_invoice!['client_address']}',
                               ),
                           ],
                         ),
                       ),
+                      const SizedBox(height: 20),
+                      Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: line),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: DataTable(
+                            columns: const [
+                              DataColumn(label: Text('بيان')),
+                              DataColumn(label: Text('العدد')),
+                              DataColumn(label: Text('العبوة')),
+                              DataColumn(label: Text('سعر الوحدة')),
+                              DataColumn(label: Text('الإجمالي')),
+                            ],
+                            rows: [
+                              for (final item in _invoice!['items'] as List)
+                                DataRow(
+                                  cells: [
+                                    DataCell(Text('${item['title']}')),
+                                    DataCell(
+                                      Text(
+                                        '${item['package_count'] ?? item['quantity']}',
+                                      ),
+                                    ),
+                                    DataCell(
+                                      Text(
+                                        '${item['units_per_package'] ?? item['pieces_per_unit']}',
+                                      ),
+                                    ),
+                                    DataCell(
+                                      Text(
+                                        egp(item['unit_price_minor'] as int),
+                                      ),
+                                    ),
+                                    DataCell(
+                                      Text(egp(item['total_minor'] as int)),
+                                    ),
+                                  ],
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
                       const SizedBox(height: 24),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: Text(
-                          'الإجمالي: ${egp(_invoice!['total_minor'] as int)}',
-                          style: Theme.of(context).textTheme.titleLarge,
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 16,
+                        ),
+                        decoration: BoxDecoration(
+                          color: ink,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            const Expanded(
+                              child: Text(
+                                'إجمالي الفاتورة',
+                                style: TextStyle(color: Color(0xFFB6C9C1)),
+                              ),
+                            ),
+                            Text(
+                              egp(_invoice!['total_minor'] as int),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 21,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       if (_invoice!['status'] == 'posted') ...[

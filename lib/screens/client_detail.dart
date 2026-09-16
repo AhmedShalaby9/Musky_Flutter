@@ -29,7 +29,6 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
   List<Map<String, dynamic>> _entries = [];
   bool _loading = true;
   String? _error;
-  final _horizontal = ScrollController();
 
   @override
   void initState() {
@@ -40,7 +39,6 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
   @override
   void dispose() {
     _loadCancellation.cancel();
-    _horizontal.dispose();
     super.dispose();
   }
 
@@ -163,6 +161,174 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
     }
   }
 
+  Widget _detailSummary(String label, String value, Color color) => Container(
+    width: 210,
+    padding: const EdgeInsets.all(18),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      border: Border.all(color: line),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(color: muted)),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: TextStyle(
+            color: color,
+            fontSize: 19,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _ledgerCards() => ListView.separated(
+    padding: const EdgeInsets.fromLTRB(24, 4, 24, 24),
+    itemCount: _entries.length,
+    separatorBuilder: (_, _) => const SizedBox(height: 10),
+    itemBuilder: (context, index) {
+      final entry = _entries[index];
+      final delta = (entry['delta_minor'] as num).toInt();
+      final running = (entry['running_balance'] as num).toInt();
+      final invoice = _invoiceEntry(entry);
+      final positive = delta >= 0;
+      final color = positive ? const Color(0xFFA33624) : teal;
+      final icon =
+          entry['kind'] == 'receipt' || entry['kind'] == 'invoice_payment'
+          ? Icons.payments_outlined
+          : entry['document_type'] == 'purchase'
+          ? Icons.shopping_cart_outlined
+          : Icons.receipt_long_outlined;
+      return Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: invoice
+              ? () => _openInvoice((entry['ref_id'] as num).toInt())
+              : null,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
+            decoration: BoxDecoration(
+              border: Border.all(color: line),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: LayoutBuilder(
+              builder: (context, size) {
+                final fields = [
+                  _ledgerField('التاريخ', _formatAt(entry['at'] as String?)),
+                  _ledgerField('الطريقة', _methodLabel(entry['method'])),
+                  _ledgerField(
+                    'الرصيد بعد الحركة',
+                    egp(running),
+                    emphasize: true,
+                  ),
+                ];
+                final identity = Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: color.withValues(alpha: .10),
+                      foregroundColor: color,
+                      child: Icon(icon, size: 19),
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _kindLabel(entry),
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        if ('${entry['notes'] ?? ''}'.isNotEmpty)
+                          SizedBox(
+                            width: 180,
+                            child: Text(
+                              '${entry['notes']}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: muted,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                );
+                final amount = Text(
+                  '${positive ? '+' : '−'} ${egp(delta.abs())}',
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                  ),
+                );
+                if (size.maxWidth < 760) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      identity,
+                      const SizedBox(height: 14),
+                      Wrap(
+                        spacing: 24,
+                        runSpacing: 12,
+                        children: fields
+                            .map((field) => SizedBox(width: 155, child: field))
+                            .toList(),
+                      ),
+                      const SizedBox(height: 12),
+                      amount,
+                    ],
+                  );
+                }
+                return Row(
+                  children: [
+                    Expanded(flex: 2, child: identity),
+                    for (final field in fields) Expanded(child: field),
+                    amount,
+                    if (invoice)
+                      const Padding(
+                        padding: EdgeInsets.only(right: 8),
+                        child: Icon(
+                          Icons.arrow_forward_ios,
+                          size: 16,
+                          color: muted,
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+      );
+    },
+  );
+
+  Widget _ledgerField(String label, String value, {bool emphasize = false}) =>
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 11, color: muted)),
+          const SizedBox(height: 5),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontWeight: emphasize ? FontWeight.w700 : FontWeight.w500,
+              color: emphasize ? teal : ink,
+            ),
+          ),
+        ],
+      );
+
   @override
   Widget build(BuildContext context) {
     final balanceMinor = (_client?['balance_minor'] as num?)?.toInt() ?? 0;
@@ -188,38 +354,35 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
-          Container(
-            width: double.infinity,
-            color: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 12, 24, 18),
+            child: Wrap(
+              spacing: 14,
+              runSpacing: 14,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'الرصيد الحالي',
-                        style: TextStyle(color: muted, fontSize: 13),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        egp(balanceMinor),
-                        style: TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.w700,
-                          color: balanceMinor < 0
-                              ? const Color(0xFFA33624)
-                              : balanceMinor == 0
-                              ? muted
-                              : teal,
-                          letterSpacing: -.5,
-                        ),
-                      ),
-                    ],
-                  ),
+                _detailSummary(
+                  'الرصيد الحالي',
+                  egp(balanceMinor),
+                  balanceMinor < 0
+                      ? const Color(0xFFA33624)
+                      : balanceMinor == 0
+                      ? muted
+                      : teal,
+                ),
+                _detailSummary(
+                  'حالة الحساب',
+                  balanceMinor > 0
+                      ? 'مستحق من العميل'
+                      : balanceMinor < 0
+                      ? 'مستحق للعميل'
+                      : 'متوازن',
+                  ink,
+                ),
+                _detailSummary(
+                  'عدد الحركات',
+                  '${_entries.length}',
+                  const Color(0xFF536D8A),
                 ),
                 FilledButton.icon(
                   onPressed: (_loading || balanceMinor <= 0)
@@ -231,8 +394,6 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
               ],
             ),
           ),
-          const Divider(height: 1),
-          // Table
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
@@ -260,101 +421,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                       style: TextStyle(color: muted, fontSize: 16),
                     ),
                   )
-                : Scrollbar(
-                    controller: _horizontal,
-                    thumbVisibility: true,
-                    child: SingleChildScrollView(
-                      controller: _horizontal,
-                      scrollDirection: Axis.horizontal,
-                      child: SingleChildScrollView(
-                        child: DataTable(
-                          headingRowColor: WidgetStateProperty.all(
-                            const Color(0xFFF8FAF6),
-                          ),
-                          headingTextStyle: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: muted,
-                            fontSize: 12,
-                          ),
-                          dataRowMinHeight: 52,
-                          dataRowMaxHeight: 52,
-                          columns: const [
-                            DataColumn(label: Text('التاريخ')),
-                            DataColumn(label: Text('النوع')),
-                            DataColumn(label: Text('الوصف')),
-                            DataColumn(label: Text('الطريقة')),
-                            DataColumn(label: Text('المبلغ'), numeric: true),
-                            DataColumn(
-                              label: Text('الرصيد التراكمي'),
-                              numeric: true,
-                            ),
-                          ],
-                          rows: _entries.map((entry) {
-                            final delta = (entry['delta_minor'] as num).toInt();
-                            final running = (entry['running_balance'] as num)
-                                .toInt();
-                            return DataRow(
-                              cells: [
-                                DataCell(
-                                  Text(
-                                    _formatAt(entry['at'] as String?),
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                ),
-                                DataCell(
-                                  _invoiceEntry(entry)
-                                      ? TextButton(
-                                          onPressed: () => _openInvoice(
-                                            (entry['ref_id'] as num).toInt(),
-                                          ),
-                                          child: Text(_kindLabel(entry)),
-                                        )
-                                      : Text(_kindLabel(entry)),
-                                ),
-                                DataCell(
-                                  SizedBox(
-                                    width: 160,
-                                    child: Text(
-                                      '${entry['notes'] ?? ''}'.isEmpty
-                                          ? '—'
-                                          : '${entry['notes']}',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ),
-                                DataCell(Text(_methodLabel(entry['method']))),
-                                DataCell(
-                                  Text(
-                                    egp(delta.abs()),
-                                    style: TextStyle(
-                                      color: delta < 0
-                                          ? teal
-                                          : const Color(0xFFA33624),
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ),
-                                DataCell(
-                                  Text(
-                                    egp(running),
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      color: running < 0
-                                          ? const Color(0xFFA33624)
-                                          : running == 0
-                                          ? muted
-                                          : null,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                    ),
-                  ),
+                : _ledgerCards(),
           ),
         ],
       ),

@@ -151,6 +151,276 @@ class _CommerceScreenState extends State<CommerceScreen> {
     if (mounted) widget.cubit.refresh();
   }
 
+  Widget _invoiceField(String label, String value, {bool emphasis = false}) =>
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 11, color: muted)),
+          const SizedBox(height: 5),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: emphasis ? teal : ink,
+              fontWeight: emphasis ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+        ],
+      );
+
+  Widget _invoiceSummary(String label, int amount, Color color) => Container(
+    width: 210,
+    padding: const EdgeInsets.all(18),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      border: Border.all(color: line),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(color: muted)),
+        const SizedBox(height: 8),
+        Text(
+          egp(amount),
+          style: TextStyle(
+            color: color,
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            fontFamily: 'monospace',
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _productSummary(String label, int value, Color color) => Container(
+    width: 210,
+    padding: const EdgeInsets.all(18),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      border: Border.all(color: line),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(color: muted)),
+        const SizedBox(height: 8),
+        Text(
+          '$value',
+          style: TextStyle(
+            color: color,
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _invoiceRows(List<Map<String, dynamic>> rows) => ListView.separated(
+    itemCount: rows.length,
+    separatorBuilder: (_, _) => const SizedBox(height: 10),
+    itemBuilder: (context, index) {
+      final row = rows[index];
+      final purchase = row['document_type'] == 'purchase';
+      final type = purchase ? 'شراء' : 'بيع';
+      final typeColor = purchase ? const Color(0xFF536D8A) : teal;
+      final status = invoiceStatusLabel('${row['status']}');
+      return InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _openInvoice(row['id'] as int),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border.all(color: line),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x08000000),
+                blurRadius: 8,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: LayoutBuilder(
+            builder: (context, size) {
+              final fields = [
+                _invoiceField('الفاتورة', invoiceLabel(row)),
+                _invoiceField('العميل', '${row['client_name']}'),
+                _invoiceField('التاريخ', '${row['issue_date']}'),
+                _invoiceField(
+                  'الإجمالي',
+                  egp(row['total_minor'] as int),
+                  emphasis: true,
+                ),
+                _invoiceField('الحالة', status),
+              ];
+              final typeChip = Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: typeColor.withValues(alpha: .10),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  type,
+                  style: TextStyle(
+                    color: typeColor,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              );
+              if (size.maxWidth < 760) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    typeChip,
+                    const SizedBox(height: 14),
+                    Wrap(
+                      spacing: 24,
+                      runSpacing: 16,
+                      children: fields
+                          .map((field) => SizedBox(width: 150, child: field))
+                          .toList(),
+                    ),
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  typeChip,
+                  const SizedBox(width: 18),
+                  for (final field in fields) Expanded(child: field),
+                  IconButton(
+                    tooltip: 'فتح الفاتورة',
+                    onPressed: () => _openInvoice(row['id'] as int),
+                    icon: const Icon(Icons.arrow_forward_ios, size: 18),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      );
+    },
+  );
+
+  Widget _productRows(List<Map<String, dynamic>> rows) => ListView.separated(
+    itemCount: rows.length,
+    separatorBuilder: (_, _) => const SizedBox(height: 10),
+    itemBuilder: (context, index) {
+      final row = rows[index];
+      final active = row['active'] == true;
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: line),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x08000000),
+              blurRadius: 8,
+              offset: Offset(0, 2),
+            ),
+          ],
+        ),
+        child: LayoutBuilder(
+          builder: (context, size) {
+            final fields = [
+              _invoiceField('المنتج', '${row['title']}'),
+              _invoiceField('الكود', '${row['code']}'),
+              _invoiceField(
+                'المخزون',
+                '${row['quantity']} حزمة',
+                emphasis: true,
+              ),
+              _invoiceField('القطع / الحزمة', '${row['pieces_per_unit']}'),
+            ];
+            final status = Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: (active ? teal : muted).withValues(alpha: .10),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                active ? 'نشط' : 'مؤرشف',
+                style: TextStyle(
+                  color: active ? teal : muted,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            );
+            final actions = Wrap(
+              spacing: 2,
+              children: [
+                TextButton.icon(
+                  onPressed: () => _product(row),
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  label: const Text('تعديل'),
+                ),
+                TextButton.icon(
+                  onPressed: () => _openProductBuyers(row),
+                  icon: const Icon(Icons.history_outlined, size: 18),
+                  label: const Text('حركة الصنف'),
+                ),
+                TextButton.icon(
+                  onPressed: () => _toggle(row),
+                  icon: Icon(
+                    active ? Icons.archive_outlined : Icons.unarchive_outlined,
+                    size: 18,
+                  ),
+                  label: Text(active ? 'أرشفة' : 'استعادة'),
+                ),
+                TextButton.icon(
+                  onPressed: () => _delete(row),
+                  icon: const Icon(
+                    Icons.delete_outline,
+                    size: 18,
+                    color: Colors.red,
+                  ),
+                  label: const Text('حذف', style: TextStyle(color: Colors.red)),
+                ),
+              ],
+            );
+            if (size.maxWidth < 760) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  status,
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 24,
+                    runSpacing: 16,
+                    children: fields
+                        .map((field) => SizedBox(width: 150, child: field))
+                        .toList(),
+                  ),
+                  const SizedBox(height: 10),
+                  actions,
+                ],
+              );
+            }
+            return Row(
+              children: [
+                status,
+                const SizedBox(width: 18),
+                for (final field in fields) Expanded(child: field),
+                actions,
+              ],
+            );
+          },
+        ),
+      );
+    },
+  );
+
   @override
   Widget build(
     BuildContext context,
@@ -223,31 +493,65 @@ class _CommerceScreenState extends State<CommerceScreen> {
                           );
                         },
                       )
-                    : DropdownButtonFormField<String>(
-                        value: state.statusFilter,
-                        decoration: const InputDecoration(
-                          labelText: 'حالة الفاتورة',
-                        ),
-                        items: [
-                          for (final status in [
-                            '',
-                            'draft',
-                            'posted',
-                            'void',
-                            'cancelled',
-                          ])
-                            DropdownMenuItem(
-                              value: status,
-                              child: Text(
-                                status.isEmpty
-                                    ? 'جميع الفواتير'
-                                    : invoiceStatusLabel(status),
+                    : Row(
+                        children: [
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              value: state.documentTypeFilter ?? '',
+                              decoration: const InputDecoration(
+                                labelText: 'نوع الفاتورة',
                               ),
+                              items: const [
+                                DropdownMenuItem(
+                                  value: '',
+                                  child: Text('بيع وشراء'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'sale',
+                                  child: Text('بيع فقط'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'purchase',
+                                  child: Text('شراء فقط'),
+                                ),
+                              ],
+                              onChanged: busy
+                                  ? null
+                                  : (value) =>
+                                        widget.cubit.filterDocumentType(value!),
                             ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              value: state.statusFilter,
+                              decoration: const InputDecoration(
+                                labelText: 'حالة الفاتورة',
+                              ),
+                              items: [
+                                for (final status in [
+                                  '',
+                                  'draft',
+                                  'posted',
+                                  'void',
+                                  'cancelled',
+                                ])
+                                  DropdownMenuItem(
+                                    value: status,
+                                    child: Text(
+                                      status.isEmpty
+                                          ? 'كل الحالات'
+                                          : invoiceStatusLabel(status),
+                                    ),
+                                  ),
+                              ],
+                              onChanged: busy
+                                  ? null
+                                  : (value) =>
+                                        widget.cubit.filterStatus(value!),
+                            ),
+                          ),
                         ],
-                        onChanged: busy
-                            ? null
-                            : (value) => widget.cubit.filterStatus(value!),
                       ),
               ),
               const SizedBox(width: 12),
@@ -259,6 +563,70 @@ class _CommerceScreenState extends State<CommerceScreen> {
             ],
           ),
           const SizedBox(height: 18),
+          if (!widget.products) ...[
+            Wrap(
+              spacing: 14,
+              runSpacing: 14,
+              children: [
+                _invoiceSummary(
+                  'مبيعات هذه الصفحة',
+                  rows
+                      .where((row) => row['document_type'] != 'purchase')
+                      .fold<int>(
+                        0,
+                        (total, row) => total + (row['total_minor'] as int),
+                      ),
+                  teal,
+                ),
+                _invoiceSummary(
+                  'مشتريات هذه الصفحة',
+                  rows
+                      .where((row) => row['document_type'] == 'purchase')
+                      .fold<int>(
+                        0,
+                        (total, row) => total + (row['total_minor'] as int),
+                      ),
+                  const Color(0xFF536D8A),
+                ),
+                _invoiceSummary(
+                  'إجمالي هذه الصفحة',
+                  rows.fold<int>(
+                    0,
+                    (total, row) => total + (row['total_minor'] as int),
+                  ),
+                  ink,
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+          ],
+          if (widget.products) ...[
+            Wrap(
+              spacing: 14,
+              runSpacing: 14,
+              children: [
+                _productSummary(
+                  'إجمالي الحزم',
+                  rows.fold<int>(
+                    0,
+                    (total, row) => total + (row['quantity'] as int),
+                  ),
+                  teal,
+                ),
+                _productSummary(
+                  'منتجات نشطة',
+                  rows.where((row) => row['active'] == true).length,
+                  const Color(0xFF527A54),
+                ),
+                _productSummary(
+                  'منتجات مؤرشفة',
+                  rows.where((row) => row['active'] != true).length,
+                  muted,
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+          ],
           Expanded(
             child: Container(
               width: double.infinity,
@@ -295,200 +663,211 @@ class _CommerceScreenState extends State<CommerceScreen> {
                         style: const TextStyle(color: muted),
                       ),
                     )
+                  : !widget.products
+                  ? _invoiceRows(rows)
                   : LayoutBuilder(
-                      builder: (context, size) => Scrollbar(
-                        controller: _scroll,
-                        thumbVisibility: true,
-                        child: SingleChildScrollView(
+                      builder: (context, size) {
+                        if (rows.isNotEmpty) return _productRows(rows);
+                        return Scrollbar(
                           controller: _scroll,
-                          scrollDirection: Axis.horizontal,
-                          child: ConstrainedBox(
-                            constraints: BoxConstraints(
-                              minWidth: size.maxWidth,
-                            ),
-                            child: SingleChildScrollView(
-                              child: DataTable(
-                                columnSpacing: 24,
-                                horizontalMargin: 20,
-                                headingRowColor: WidgetStateProperty.all(
-                                  const Color(0xFFF8FAF6),
-                                ),
-                                dataRowMinHeight: 64,
-                                dataRowMaxHeight: 64,
-                                columns: [
-                                  for (final title
-                                      in widget.products
-                                          ? [
-                                              'المنتج',
-                                              'الكود',
-                                              'الحزم',
-                                              'القطع / الحزمة',
-                                              'الحالة',
-                                              'الإجراءات',
-                                            ]
-                                          : [
-                                              'الفاتورة',
-                                              'النوع',
-                                              'العميل',
-                                              'التاريخ',
-                                              'الإجمالي',
-                                              'الحالة',
-                                              'الإجراءات',
-                                            ])
-                                    DataColumn(label: Text(title)),
-                                ],
-                                rows: rows
-                                    .map(
-                                      (row) => DataRow(
-                                        cells: widget.products
+                          thumbVisibility: true,
+                          child: SingleChildScrollView(
+                            controller: _scroll,
+                            scrollDirection: Axis.horizontal,
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                minWidth: size.maxWidth,
+                              ),
+                              child: SingleChildScrollView(
+                                child: DataTable(
+                                  columnSpacing: 24,
+                                  horizontalMargin: 20,
+                                  headingRowColor: WidgetStateProperty.all(
+                                    const Color(0xFFF8FAF6),
+                                  ),
+                                  dataRowMinHeight: 64,
+                                  dataRowMaxHeight: 64,
+                                  columns: [
+                                    for (final title
+                                        in widget.products
                                             ? [
-                                                DataCell(
-                                                  SizedBox(
-                                                    width: 150,
-                                                    child: Text(
-                                                      '${row['title']}',
-                                                      maxLines: 1,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                    ),
-                                                  ),
-                                                ),
-                                                DataCell(
-                                                  Text('${row['code']}'),
-                                                ),
-                                                DataCell(
-                                                  Text('${row['quantity']}'),
-                                                ),
-                                                DataCell(
-                                                  Text(
-                                                    '${row['pieces_per_unit']}',
-                                                  ),
-                                                ),
-                                                DataCell(
-                                                  Text(
-                                                    row['active'] == true
-                                                        ? 'نشط'
-                                                        : 'مؤرشف',
-                                                  ),
-                                                ),
-                                                DataCell(
-                                                  Row(
-                                                    mainAxisSize:
-                                                        MainAxisSize.min,
-                                                    children: [
-                                                      IconButton(
-                                                        tooltip:
-                                                            'تعديل ${row['title']}',
-                                                        onPressed: () =>
-                                                            _product(row),
-                                                        icon: const Icon(
-                                                          Icons.edit_outlined,
-                                                          size: 19,
-                                                        ),
-                                                      ),
-                                                      TextButton.icon(
-                                                        onPressed: () =>
-                                                            _openProductBuyers(
-                                                              row,
-                                                            ),
-                                                        icon: const Icon(
-                                                          Icons.groups_outlined,
-                                                          size: 18,
-                                                        ),
-                                                        label: const Text(
-                                                          'شوف مين اشترى الصنف ده من هنا',
-                                                        ),
-                                                      ),
-                                                      IconButton(
-                                                        tooltip:
-                                                            row['active'] ==
-                                                                true
-                                                            ? 'أرشفة ${row['title']}'
-                                                            : 'استعادة ${row['title']}',
-                                                        onPressed: () =>
-                                                            _toggle(row),
-                                                        icon: Icon(
-                                                          row['active'] == true
-                                                              ? Icons
-                                                                    .archive_outlined
-                                                              : Icons
-                                                                    .unarchive_outlined,
-                                                          size: 19,
-                                                        ),
-                                                      ),
-                                                      IconButton(
-                                                        tooltip:
-                                                            'حذف ${row['title']}',
-                                                        onPressed: () =>
-                                                            _delete(row),
-                                                        icon: const Icon(
-                                                          Icons.delete_outline,
-                                                          size: 19,
-                                                          color: Colors.red,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
+                                                'المنتج',
+                                                'الكود',
+                                                'الحزم',
+                                                'القطع / الحزمة',
+                                                'الحالة',
+                                                'الإجراءات',
                                               ]
                                             : [
-                                                DataCell(
-                                                  Text(invoiceLabel(row)),
-                                                ),
-                                                DataCell(
-                                                  Text(
-                                                    invoiceTypeLabel(
-                                                      row['document_type'],
+                                                'الفاتورة',
+                                                'النوع',
+                                                'العميل',
+                                                'التاريخ',
+                                                'الإجمالي',
+                                                'الحالة',
+                                                'الإجراءات',
+                                              ])
+                                      DataColumn(label: Text(title)),
+                                  ],
+                                  rows: rows
+                                      .map(
+                                        (row) => DataRow(
+                                          cells: widget.products
+                                              ? [
+                                                  DataCell(
+                                                    SizedBox(
+                                                      width: 150,
+                                                      child: Text(
+                                                        '${row['title']}',
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                      ),
                                                     ),
                                                   ),
-                                                ),
-                                                DataCell(
-                                                  SizedBox(
-                                                    width: 180,
-                                                    child: Text(
-                                                      '${row['client_name']}',
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
+                                                  DataCell(
+                                                    Text('${row['code']}'),
+                                                  ),
+                                                  DataCell(
+                                                    Text('${row['quantity']}'),
+                                                  ),
+                                                  DataCell(
+                                                    Text(
+                                                      '${row['pieces_per_unit']}',
                                                     ),
                                                   ),
-                                                ),
-                                                DataCell(
-                                                  Text('${row['issue_date']}'),
-                                                ),
-                                                DataCell(
-                                                  Text(
-                                                    egp(
-                                                      row['total_minor'] as int,
+                                                  DataCell(
+                                                    Text(
+                                                      row['active'] == true
+                                                          ? 'نشط'
+                                                          : 'مؤرشف',
                                                     ),
                                                   ),
-                                                ),
-                                                DataCell(
-                                                  Text(
-                                                    invoiceStatusLabel(
-                                                      '${row['status']}',
-                                                    ),
-                                                  ),
-                                                ),
-                                                DataCell(
-                                                  TextButton(
-                                                    onPressed: () =>
-                                                        _openInvoice(
-                                                          row['id'] as int,
+                                                  DataCell(
+                                                    Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        IconButton(
+                                                          tooltip:
+                                                              'تعديل ${row['title']}',
+                                                          onPressed: () =>
+                                                              _product(row),
+                                                          icon: const Icon(
+                                                            Icons.edit_outlined,
+                                                            size: 19,
+                                                          ),
                                                         ),
-                                                    child: const Text(
-                                                      'فتح الفاتورة',
+                                                        TextButton.icon(
+                                                          onPressed: () =>
+                                                              _openProductBuyers(
+                                                                row,
+                                                              ),
+                                                          icon: const Icon(
+                                                            Icons
+                                                                .groups_outlined,
+                                                            size: 18,
+                                                          ),
+                                                          label: const Text(
+                                                            'شوف مين اشترى الصنف ده من هنا',
+                                                          ),
+                                                        ),
+                                                        IconButton(
+                                                          tooltip:
+                                                              row['active'] ==
+                                                                  true
+                                                              ? 'أرشفة ${row['title']}'
+                                                              : 'استعادة ${row['title']}',
+                                                          onPressed: () =>
+                                                              _toggle(row),
+                                                          icon: Icon(
+                                                            row['active'] ==
+                                                                    true
+                                                                ? Icons
+                                                                      .archive_outlined
+                                                                : Icons
+                                                                      .unarchive_outlined,
+                                                            size: 19,
+                                                          ),
+                                                        ),
+                                                        IconButton(
+                                                          tooltip:
+                                                              'حذف ${row['title']}',
+                                                          onPressed: () =>
+                                                              _delete(row),
+                                                          icon: const Icon(
+                                                            Icons
+                                                                .delete_outline,
+                                                            size: 19,
+                                                            color: Colors.red,
+                                                          ),
+                                                        ),
+                                                      ],
                                                     ),
                                                   ),
-                                                ),
-                                              ],
-                                      ),
-                                    )
-                                    .toList(),
+                                                ]
+                                              : [
+                                                  DataCell(
+                                                    Text(invoiceLabel(row)),
+                                                  ),
+                                                  DataCell(
+                                                    Text(
+                                                      invoiceTypeLabel(
+                                                        row['document_type'],
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  DataCell(
+                                                    SizedBox(
+                                                      width: 180,
+                                                      child: Text(
+                                                        '${row['client_name']}',
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  DataCell(
+                                                    Text(
+                                                      '${row['issue_date']}',
+                                                    ),
+                                                  ),
+                                                  DataCell(
+                                                    Text(
+                                                      egp(
+                                                        row['total_minor']
+                                                            as int,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  DataCell(
+                                                    Text(
+                                                      invoiceStatusLabel(
+                                                        '${row['status']}',
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  DataCell(
+                                                    TextButton(
+                                                      onPressed: () =>
+                                                          _openInvoice(
+                                                            row['id'] as int,
+                                                          ),
+                                                      child: const Text(
+                                                        'فتح الفاتورة',
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                        ),
+                                      )
+                                      .toList(),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ),
+                        );
+                      },
                     ),
             ),
           ),

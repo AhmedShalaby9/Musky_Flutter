@@ -421,6 +421,9 @@ class _WorkspaceState extends State<Workspace> {
     name: widget.user.name,
     onExpired: _expired,
     onInvoices: () => setState(() => _section = 'الفواتير'),
+    onClients: () => setState(() => _section = 'العملاء'),
+    onProducts: () => setState(() => _section = 'المنتجات'),
+    onJournal: () => setState(() => _section = 'دفتر اليومية'),
   );
   Widget _account() => SingleChildScrollView(
     child: Column(
