@@ -269,10 +269,14 @@ class _WorkspaceState extends State<Workspace> {
                                 children: [
                                   const Icon(Icons.logout, size: 20),
                                   const SizedBox(width: 12),
-                                  Text(
-                                    _signingOut
-                                        ? 'جارٍ الخروج…'
-                                        : 'تسجيل الخروج',
+                                  Expanded(
+                                    child: Text(
+                                      _signingOut
+                                          ? 'جارٍ الخروج…'
+                                          : 'تسجيل الخروج',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
                                 ],
                               ),

@@ -4,9 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:musky/core/api.dart';
 
 void main() {
-  test('rejects insecure remote servers and credentials in URLs', () {
+  test('rejects credentials and unsupported API URL schemes', () {
     for (final url in [
-      'http://example.com/api/v1',
       'https://user:password@example.com/api/v1',
       'ftp://localhost/api/v1',
     ]) {

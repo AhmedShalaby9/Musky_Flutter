@@ -49,6 +49,25 @@ class FakeApi implements MuskyApi {
     if (clean.endsWith('/clients')) {
       return {'data': clients};
     }
+    if (clean.endsWith('/buyers')) {
+      return {
+        'product': products.first,
+        'data': [
+          {
+            'invoice_id': 4,
+            'invoice_number': 3,
+            'issue_date': '2026-09-15',
+            'client_id': 1,
+            'client_name': 'Nile Trading',
+            'client_address': 'Cairo',
+            'package_count': 3,
+            'units_per_package': 12,
+            'unit_price_minor': 2950,
+            'total_minor': 106200,
+          },
+        ],
+      };
+    }
     if (clean.contains('/products')) {
       if (method == 'GET') {
         return {'data': products};
@@ -150,8 +169,11 @@ class FakeApi implements MuskyApi {
     String notes,
   ) async => {};
 
-  @override
-  Future<void> reverseClientReceipt(int tenantId, int clientId, int receiptId) async {}
+  Future<void> reverseClientReceipt(
+    int tenantId,
+    int clientId,
+    int receiptId,
+  ) async {}
 
   @override
   Future<Uint8List> downloadBytes(String url) async => Uint8List(0);
@@ -202,6 +224,9 @@ class FakeApi implements MuskyApi {
   void clearSession() {
     cleared = true;
   }
+
+  @override
+  void clearCache() {}
 
   @override
   void dispose() {}
@@ -296,15 +321,10 @@ Future<void> start(
 }
 
 Future<void> signIn(WidgetTester tester) async {
-  await tester.enterText(
-    find.widgetWithText(TextFormField, 'Email address'),
-    'ahmed@example.com',
-  );
-  await tester.enterText(
-    find.widgetWithText(TextFormField, 'Password'),
-    'test-password-123',
-  );
-  await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
+  final fields = find.byType(TextFormField);
+  await tester.enterText(fields.at(0), 'ahmed@example.com');
+  await tester.enterText(fields.at(1), 'test-password-123');
+  await tester.tap(find.widgetWithText(FilledButton, 'تسجيل الدخول'));
   await tester.pumpAndSettle();
 }
 

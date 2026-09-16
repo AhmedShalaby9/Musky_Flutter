@@ -117,4 +117,20 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
+  testWidgets('product buyers button opens clients that bought the item', (
+    tester,
+  ) async {
+    final api = FakeApi();
+    await start(tester, api, size: const Size(1600, 900));
+    await signIn(tester);
+    await tester.tap(find.text('المنتجات').first);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('شوف مين اشترى الصنف ده من هنا'));
+    await tester.tap(find.text('شوف مين اشترى الصنف ده من هنا'));
+    await tester.pumpAndSettle();
+    expect(find.text('مشتري الصنف'), findsOneWidget);
+    expect(find.text('Nile Trading'), findsOneWidget);
+    expect(find.text('000003'), findsOneWidget);
+    expect(find.text('EGP 1,062.00'), findsOneWidget);
+  });
 }
