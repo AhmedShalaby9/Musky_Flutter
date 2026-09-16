@@ -91,7 +91,12 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
   }
 
   bool _invoiceEntry(Map<String, dynamic> entry) =>
-      (entry['kind'] == 'invoice' || entry['kind'] == 'void') &&
+      (entry['kind'] == 'invoice' ||
+          entry['kind'] == 'void' ||
+          entry['kind'] == 'purchase' ||
+          entry['kind'] == 'purchase_void' ||
+          entry['kind'] == 'reactivate' ||
+          entry['kind'] == 'purchase_reactivate') &&
       entry['ref_id'] != null;
 
   Future<void> _openInvoice(int invoiceId) async {
@@ -109,21 +114,26 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
 
   String _kindLabel(Map<String, dynamic> entry) {
     final kind = entry['kind'] as String? ?? '';
+    final type = invoiceTypeLabel(entry['document_type']);
     switch (kind) {
       case 'opening':
         return 'رصيد افتتاحي';
       case 'invoice':
+      case 'purchase':
+      case 'reactivate':
+      case 'purchase_reactivate':
         final num = entry['invoice_number'];
         if (num != null) {
-          return 'فاتورة INV-${num.toString().padLeft(6, '0')}';
+          return 'فاتورة $type INV-${num.toString().padLeft(6, '0')}';
         }
-        return 'فاتورة';
+        return 'فاتورة $type';
       case 'void':
-        return 'إلغاء فاتورة';
+      case 'purchase_void':
+        return 'إلغاء فاتورة $type';
       case 'invoice_payment':
         final num = entry['invoice_number'];
         if (num != null) {
-          return 'دفعة INV-${num.toString().padLeft(6, '0')}';
+          return '${type == 'شراء' ? 'دفعة للمورد' : 'دفعة من العميل'} INV-${num.toString().padLeft(6, '0')}';
         }
         return 'دفعة فاتورة';
       case 'receipt':

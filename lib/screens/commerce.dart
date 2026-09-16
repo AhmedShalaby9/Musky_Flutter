@@ -8,13 +8,6 @@ import '../core/theme.dart';
 import 'invoice_editor.dart';
 import 'product_buyers.dart';
 
-String _invoiceStatusLabel(String status) => switch (status) {
-  'draft' => 'مُسودة',
-  'posted' => 'صادرة',
-  'void' || 'cancelled' => 'ملغاة',
-  _ => status,
-};
-
 class CommerceScreen extends StatefulWidget {
   const CommerceScreen({
     super.key,
@@ -126,12 +119,17 @@ class _CommerceScreenState extends State<CommerceScreen> {
   }
 
   Future<void> _newInvoice() async {
+    await _newTransaction('sale');
+  }
+
+  Future<void> _newTransaction(String documentType) async {
     final saved = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (_) => InvoiceEditor(
         api: widget.api,
         tenantId: widget.tenantId,
         onExpired: widget.onExpired,
+        documentType: documentType,
       ),
     );
     if (saved != null && mounted) {
@@ -181,13 +179,20 @@ class _CommerceScreenState extends State<CommerceScreen> {
                     Text(
                       widget.products
                           ? 'المخزون بالحزم. الأسعار تُحدَّد في كل فاتورة.'
-                          : 'أنشئ وراجع وأصدر فواتير المبيعات.',
+                          : 'أنشئ فواتير البيع والشراء وسجّل حركة المخزون والحسابات.',
                       style: const TextStyle(color: muted),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 12),
+              if (!widget.products)
+                OutlinedButton.icon(
+                  onPressed: busy ? null : () => _newTransaction('purchase'),
+                  icon: const Icon(Icons.shopping_cart, size: 18),
+                  label: const Text('شراء من عميل'),
+                ),
+              if (!widget.products) const SizedBox(width: 8),
               FilledButton.icon(
                 onPressed: busy
                     ? null
@@ -236,7 +241,7 @@ class _CommerceScreenState extends State<CommerceScreen> {
                               child: Text(
                                 status.isEmpty
                                     ? 'جميع الفواتير'
-                                    : _invoiceStatusLabel(status),
+                                    : invoiceStatusLabel(status),
                               ),
                             ),
                         ],
@@ -323,6 +328,7 @@ class _CommerceScreenState extends State<CommerceScreen> {
                                             ]
                                           : [
                                               'الفاتورة',
+                                              'النوع',
                                               'العميل',
                                               'التاريخ',
                                               'الإجمالي',
@@ -430,6 +436,13 @@ class _CommerceScreenState extends State<CommerceScreen> {
                                                   Text(invoiceLabel(row)),
                                                 ),
                                                 DataCell(
+                                                  Text(
+                                                    invoiceTypeLabel(
+                                                      row['document_type'],
+                                                    ),
+                                                  ),
+                                                ),
+                                                DataCell(
                                                   SizedBox(
                                                     width: 180,
                                                     child: Text(
@@ -451,7 +464,7 @@ class _CommerceScreenState extends State<CommerceScreen> {
                                                 ),
                                                 DataCell(
                                                   Text(
-                                                    _invoiceStatusLabel(
+                                                    invoiceStatusLabel(
                                                       '${row['status']}',
                                                     ),
                                                   ),

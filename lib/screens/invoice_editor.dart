@@ -223,11 +223,13 @@ class InvoiceEditor extends StatefulWidget {
     required this.tenantId,
     required this.onExpired,
     this.invoice,
+    this.documentType = 'sale',
   });
   final MuskyApi api;
   final int tenantId;
   final VoidCallback onExpired;
   final Map<String, dynamic>? invoice;
+  final String documentType;
   @override
   State<InvoiceEditor> createState() => _InvoiceEditorState();
 }
@@ -246,6 +248,8 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
   int? _clientId;
   String? _clientName, _error;
   bool _busy = false;
+  String get _type =>
+      widget.invoice?['document_type'] as String? ?? widget.documentType;
   @override
   void initState() {
     super.initState();
@@ -345,6 +349,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
         id == null ? 'POST' : 'PUT',
         'tenants/${widget.tenantId}/invoices${id == null ? '' : '/$id'}',
         {
+          'document_type': _type,
           'client_id': _clientId,
           'issue_date': _date.text,
           'notes': _notes.text.trim(),
@@ -387,7 +392,11 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
   Widget build(BuildContext context) => PopScope(
     canPop: !_busy,
     child: AlertDialog(
-      title: Text(widget.invoice == null ? 'فاتورة جديدة' : 'تعديل المسودة'),
+      title: Text(
+        widget.invoice == null
+            ? (_type == 'purchase' ? 'فاتورة شراء' : 'فاتورة بيع جديدة')
+            : 'تعديل المسودة',
+      ),
       content: SizedBox(
         width: 920,
         height: MediaQuery.sizeOf(context).height * .65,
@@ -686,14 +695,18 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
         builder: (dialogContext) => AlertDialog(
           title: Text(
             action == 'post'
-                ? 'Post this invoice?'
+                ? (_invoice!['document_type'] == 'purchase'
+                      ? 'إصدار فاتورة الشراء؟'
+                      : 'إصدار فاتورة البيع؟')
                 : action == 'reactivate'
                 ? 'Reactivate this invoice?'
                 : 'Cancel this draft?',
           ),
           content: Text(
             action == 'post'
-                ? 'This deducts the listed packs from stock and records ${egp(_invoice!['total_minor'] as int)} owed by ${_invoice!['client_name']}. Posted invoices cannot be edited.'
+                ? (_invoice!['document_type'] == 'purchase'
+                      ? 'سيضيف هذا الحزم إلى المخزون ويسجل ${egp(_invoice!['total_minor'] as int)} مستحقة إلى ${_invoice!['client_name']}. لا يمكن تعديل الفاتورة بعد إصدارها.'
+                      : 'سيخصم هذا الحزم من المخزون ويسجل ${egp(_invoice!['total_minor'] as int)} مستحقة على ${_invoice!['client_name']}. لا يمكن تعديل الفاتورة بعد إصدارها.')
                 : action == 'reactivate'
                 ? 'This restores the invoice to active status and applies its stock and balance calculations again.'
                 : 'This keeps the draft as cancelled. Stock and balances will not change.',
@@ -867,7 +880,7 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
                         Text('${_invoice!['client_address']}'),
                       const SizedBox(height: 10),
                       Text(
-                        '${_invoice!['issue_date']} · ${_invoice!['status']} · EGP',
+                        '${_invoice!['issue_date']} · ${invoiceTypeLabel(_invoice!['document_type'])} · ${invoiceStatusLabel('${_invoice!['status']}')} · EGP',
                         style: const TextStyle(color: muted),
                       ),
                       const SizedBox(height: 20),
@@ -918,7 +931,7 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
                       if (_invoice!['status'] == 'posted') ...[
                         const SizedBox(height: 8),
                         Text(
-                          'المدفوع: ${egp((_invoice!['paid_minor'] as int?) ?? 0)}',
+                          '${_invoice!['document_type'] == 'purchase' ? 'المدفوع للمورد' : 'المدفوع'}: ${egp((_invoice!['paid_minor'] as int?) ?? 0)}',
                         ),
                         Text(
                           'المتبقي: ${egp((_invoice!['remaining_minor'] as int?) ?? (_invoice!['total_minor'] as int))}',

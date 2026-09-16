@@ -25,6 +25,18 @@ String egp(int minor) {
   return '${minor < 0 ? '-' : ''}EGP $whole.${(amount % 100).toString().padLeft(2, '0')}';
 }
 
-String invoiceLabel(Map<String, dynamic> invoice) => invoice['number'] == null
-    ? 'مسودة'
-    : 'إذن صادر ${invoice['number'].toString().padLeft(6, '0')}';
+String invoiceTypeLabel(dynamic type) => type == 'purchase' ? 'شراء' : 'بيع';
+
+String invoiceStatusLabel(String status) => switch (status) {
+  'draft' => 'مسودة',
+  'posted' => 'صادرة',
+  'void' || 'cancelled' => 'ملغاة',
+  _ => status,
+};
+
+String invoiceLabel(Map<String, dynamic> invoice) {
+  final type = invoiceTypeLabel(invoice['document_type']);
+  return invoice['number'] == null
+      ? 'مسودة $type'
+      : 'إذن $type ${invoice['number'].toString().padLeft(6, '0')}';
+}

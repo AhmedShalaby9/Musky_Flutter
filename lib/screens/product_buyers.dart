@@ -94,7 +94,7 @@ class _ProductBuyersScreenState extends State<ProductBuyersScreen> {
       backgroundColor: paper,
       elevation: 0,
       leading: const BackButton(color: ink),
-      title: Text('مشتري الصنف', style: Theme.of(context).textTheme.titleLarge),
+      title: Text('حركة الصنف', style: Theme.of(context).textTheme.titleLarge),
       actions: [
         IconButton(
           tooltip: 'تحديث',
@@ -176,6 +176,7 @@ class _ProductBuyersScreenState extends State<ProductBuyersScreen> {
                           DataColumn(label: Text('العميل')),
                           DataColumn(label: Text('العنوان')),
                           DataColumn(label: Text('التاريخ')),
+                          DataColumn(label: Text('النوع')),
                           DataColumn(label: Text('رقم الإذن')),
                           DataColumn(
                             label: Text('عدد الكراتين'),
@@ -212,6 +213,9 @@ class _ProductBuyersScreenState extends State<ProductBuyersScreen> {
                                 ),
                               ),
                               DataCell(Text(_date('${row['issue_date']}'))),
+                              DataCell(
+                                Text(invoiceTypeLabel(row['document_type'])),
+                              ),
                               DataCell(
                                 Text(_invoiceNumber(row['invoice_number'])),
                               ),

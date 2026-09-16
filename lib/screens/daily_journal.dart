@@ -81,7 +81,7 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
       final time = paid == null ? '—' : _time(paid);
       final invoice = p['invoice_number'] == null
           ? '—'
-          : 'INV-${(p['invoice_number'] as int).toString().padLeft(6, '0')}';
+          : '${invoiceTypeLabel(p['document_type'])} INV-${(p['invoice_number'] as int).toString().padLeft(6, '0')}';
       final notes = p['notes'] as String? ?? '';
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
@@ -259,7 +259,7 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
         final time = paid == null ? '—' : _time(paid);
         final invoice = p['invoice_number'] == null
             ? '—'
-            : 'INV-${(p['invoice_number'] as int).toString().padLeft(6, '0')}';
+            : '${invoiceTypeLabel(p['document_type'])} INV-${(p['invoice_number'] as int).toString().padLeft(6, '0')}';
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
           decoration: BoxDecoration(
