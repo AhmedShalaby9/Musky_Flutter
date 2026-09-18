@@ -23,6 +23,7 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
     widget.cubit.setDate(DateTime.now());
   }
 
+  //push
   String _dateText(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
