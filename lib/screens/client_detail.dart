@@ -294,6 +294,25 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                     fontWeight: FontWeight.w700,
                   ),
                 );
+                final affordance = editableReceipt
+                    ? const Padding(
+                        padding: EdgeInsets.only(right: 8),
+                        child: Icon(
+                          Icons.edit_outlined,
+                          size: 16,
+                          color: muted,
+                        ),
+                      )
+                    : invoice
+                    ? const Padding(
+                        padding: EdgeInsets.only(right: 8),
+                        child: Icon(
+                          Icons.arrow_forward_ios,
+                          size: 16,
+                          color: muted,
+                        ),
+                      )
+                    : null;
                 if (size.maxWidth < 760) {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -308,7 +327,24 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                             .toList(),
                       ),
                       const SizedBox(height: 12),
-                      amount,
+                      Row(
+                        children: [
+                          amount,
+                          if (editableReceipt) ...[
+                            const SizedBox(width: 10),
+                            const Icon(
+                              Icons.edit_outlined,
+                              size: 14,
+                              color: muted,
+                            ),
+                            const SizedBox(width: 4),
+                            const Text(
+                              'تعديل',
+                              style: TextStyle(fontSize: 12, color: muted),
+                            ),
+                          ],
+                        ],
+                      ),
                     ],
                   );
                 }
@@ -317,15 +353,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                     Expanded(flex: 2, child: identity),
                     for (final field in fields) Expanded(child: field),
                     amount,
-                    if (invoice)
-                      const Padding(
-                        padding: EdgeInsets.only(right: 8),
-                        child: Icon(
-                          Icons.arrow_forward_ios,
-                          size: 16,
-                          color: muted,
-                        ),
-                      ),
+                    ?affordance,
                   ],
                 );
               },
