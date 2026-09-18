@@ -83,6 +83,24 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
         clientId: widget.clientId,
         balanceMinor: balanceMinor,
         onExpired: widget.onExpired,
+        direction: balanceMinor < 0 ? 'out' : 'in',
+      ),
+    );
+    if (saved == true && mounted) await _load();
+  }
+
+  Future<void> _editReceipt(Map<String, dynamic> entry) async {
+    final direction = entry['kind'] == 'client_payment' ? 'out' : 'in';
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (_) => ReceiptDialog(
+        api: widget.api,
+        tenantId: widget.tenantId,
+        clientId: widget.clientId,
+        balanceMinor: (_client?['balance_minor'] as num?)?.toInt() ?? 0,
+        onExpired: widget.onExpired,
+        direction: direction,
+        receipt: entry,
       ),
     );
     if (saved == true && mounted) await _load();
@@ -136,6 +154,8 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
         return 'دفعة فاتورة';
       case 'receipt':
         return 'دفعة عامة';
+      case 'client_payment':
+        return 'سداد للعميل';
       case 'reversal':
         return 'عكس دفعة';
       default:
@@ -203,14 +223,19 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
           : entry['document_type'] == 'purchase'
           ? Icons.shopping_cart_outlined
           : Icons.receipt_long_outlined;
+      final editableReceipt =
+          (entry['kind'] == 'receipt' || entry['kind'] == 'client_payment') &&
+          entry['ref_id'] != null;
       return Material(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: invoice
-              ? () => _openInvoice((entry['ref_id'] as num).toInt())
-              : null,
+            onTap: invoice
+                ? () => _openInvoice((entry['ref_id'] as num).toInt())
+                : editableReceipt
+                    ? () => _editReceipt(entry)
+                    : null,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
             decoration: BoxDecoration(
@@ -385,11 +410,11 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                   const Color(0xFF536D8A),
                 ),
                 FilledButton.icon(
-                  onPressed: (_loading || balanceMinor <= 0)
+                  onPressed: (_loading || balanceMinor == 0)
                       ? null
                       : _showReceiptDialog,
                   icon: const Icon(Icons.payments_outlined, size: 18),
-                  label: const Text('تسجيل دفعة'),
+                  label: Text(balanceMinor < 0 ? 'سداد للعميل' : 'تسجيل دفعة'),
                 ),
               ],
             ),
@@ -437,12 +462,16 @@ class ReceiptDialog extends StatefulWidget {
     required this.clientId,
     required this.balanceMinor,
     required this.onExpired,
+    this.direction = 'in',
+    this.receipt,
   });
   final MuskyApi api;
   final int tenantId;
   final int clientId;
   final int balanceMinor;
   final VoidCallback onExpired;
+  final String direction;
+  final Map<String, dynamic>? receipt;
 
   @override
   State<ReceiptDialog> createState() => _ReceiptDialogState();
@@ -455,6 +484,18 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
   String _method = 'cash';
   String? _error;
   bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final receipt = widget.receipt;
+    if (receipt != null) {
+      final amount = ((receipt['amount_minor'] as num?) ?? (receipt['delta_minor'] as num?)?.abs() ?? 0).toInt();
+      _amount.text = (amount / 100).toStringAsFixed(2);
+      _notes.text = '${receipt['notes'] ?? ''}';
+      _method = receipt['method'] as String? ?? 'cash';
+    }
+  }
 
   @override
   void dispose() {
@@ -475,13 +516,11 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
         setState(() => _error = 'أدخل مبلغاً صحيحاً.');
         return;
       }
-      await widget.api.createClientReceipt(
-        widget.tenantId,
-        widget.clientId,
-        amountMinor,
-        _method,
-        _notes.text.trim(),
-      );
+      if (widget.receipt == null) {
+        await widget.api.createClientReceipt(widget.tenantId, widget.clientId, amountMinor, _method, _notes.text.trim(), direction: widget.direction);
+      } else {
+        await widget.api.updateClientReceipt(widget.tenantId, widget.clientId, (widget.receipt!['ref_id'] as num).toInt(), amountMinor, _method, _notes.text.trim(), direction: widget.direction);
+      }
       if (mounted) Navigator.pop(context, true);
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -502,7 +541,11 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
   Widget build(BuildContext context) => PopScope(
     canPop: !_busy,
     child: AlertDialog(
-      title: const Text('تسجيل دفعة'),
+      title: Text(
+        widget.receipt == null
+            ? (widget.direction == 'out' ? 'سداد للعميل' : 'تسجيل دفعة من العميل')
+            : 'تعديل الدفعة',
+      ),
       content: SizedBox(
         width: 420,
         child: SingleChildScrollView(
@@ -532,7 +575,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                     final minor = parseMoney(v);
                     if (minor == null || minor <= 0)
                       return 'أدخل مبلغاً صحيحاً.';
-                    if (minor > widget.balanceMinor)
+                    if (widget.receipt == null && minor > widget.balanceMinor)
                       return 'المبلغ أكبر من الرصيد.';
                     return null;
                   },
@@ -569,7 +612,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
         ),
         FilledButton(
           onPressed: _busy ? null : _save,
-          child: Text(_busy ? 'جارٍ الحفظ…' : 'تسجيل'),
+          child: Text(_busy ? 'جارٍ الحفظ…' : widget.receipt == null ? 'تسجيل' : 'حفظ التعديل'),
         ),
       ],
     ),

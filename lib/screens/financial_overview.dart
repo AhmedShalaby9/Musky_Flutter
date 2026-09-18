@@ -225,9 +225,52 @@ class _FinancialOverviewState extends State<FinancialOverview> {
             ),
           const SizedBox(height: 20),
           const Text(
-            'بناءً على الفواتير المُصدرة والملغاة. المدفوعات والأرصدة الافتتاحية غير مدرجة بعد.',
+            'بناءً على الأرصدة الافتتاحية والفواتير والمدفوعات والدفعات المسجلة.',
             style: TextStyle(color: muted),
           ),
+          if (state.summary?['clients'] is List) ...[
+            const SizedBox(height: 28),
+            const Text(
+              'تفصيل الأرصدة حسب العميل',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border.all(color: line),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  for (final raw in (state.summary!['clients'] as List)
+                      .whereType<Map>()
+                      .where((client) => ((client['balance_minor'] as num?) ?? 0) != 0)
+                      .take(10))
+                    ListTile(
+                      dense: true,
+                      title: Text('${raw['name'] ?? ''}'),
+                      subtitle: Text(
+                        (raw['balance_minor'] as num? ?? 0) >= 0
+                            ? 'مدين لك'
+                            : 'أنت مدين له',
+                        style: const TextStyle(color: muted),
+                      ),
+                      trailing: Text(
+                        egp(((raw['balance_minor'] as num?) ?? 0).abs().toInt()),
+                        style: TextStyle(
+                          color: (raw['balance_minor'] as num? ?? 0) >= 0
+                              ? teal
+                              : Colors.red.shade700,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 32),
           // ── Overdue clients section ──────────────────────────────
           Row(

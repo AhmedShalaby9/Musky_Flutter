@@ -106,8 +106,18 @@ abstract class MuskyApi {
     int clientId,
     int amountMinor,
     String method,
-    String notes,
-  );
+    String notes, {
+    String direction = 'in',
+  });
+  Future<Map<String, dynamic>> updateClientReceipt(
+    int tenantId,
+    int clientId,
+    int receiptId,
+    int amountMinor,
+    String method,
+    String notes, {
+    String direction = 'in',
+  });
   Future<Map<String, dynamic>> clientLedger(
     int tenantId,
     int clientId, {
@@ -491,11 +501,29 @@ class HttpMuskyApi implements MuskyApi {
     int clientId,
     int amountMinor,
     String method,
-    String notes,
-  ) => _request('POST', 'tenants/$tenantId/clients/$clientId/receipts', {
+    String notes, {
+    String direction = 'in',
+  }) => _request('POST', 'tenants/$tenantId/clients/$clientId/receipts', {
     'amount_minor': amountMinor,
     'method': method,
     'notes': notes,
+    'direction': direction,
+  });
+
+  @override
+  Future<Map<String, dynamic>> updateClientReceipt(
+    int tenantId,
+    int clientId,
+    int receiptId,
+    int amountMinor,
+    String method,
+    String notes, {
+    String direction = 'in',
+  }) => _request('PATCH', 'tenants/$tenantId/clients/$clientId/receipts/$receiptId', {
+    'amount_minor': amountMinor,
+    'method': method,
+    'notes': notes,
+    'direction': direction,
   });
 
   @override

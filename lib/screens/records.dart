@@ -82,30 +82,63 @@ class _RecordsScreenState extends State<RecordsScreen> {
   }
 
   Future<void> _delete(Map<String, dynamic> client) async {
+    final id = client['id'] as int;
+    Map<String, dynamic> associations;
+    try {
+      final result = await widget.api.request(
+        'GET',
+        'tenants/${widget.tenantId}/clients/$id/associations',
+      );
+      associations = (result['associations'] as Map).cast<String, dynamic>();
+    } on ApiException catch (e) {
+      if (e.status == 401 && mounted) widget.onExpired();
+      return;
+    }
+    final invoices = (associations['Invoices'] ?? associations['invoices'] ?? 0) as num;
+    final payments = (associations['Payments'] ?? associations['payments'] ?? 0) as num;
+    final ledger = (associations['Ledger'] ?? associations['ledger'] ?? 0) as num;
+    final receipts = (associations['Receipts'] ?? associations['receipts'] ?? 0) as num;
+    final removable = payments.toInt() + ledger.toInt() + receipts.toInt();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('حذف العميل'),
-        content: Text('هل تريد حذف "${client['name']}" نهائياً؟'),
+        title: const Text('مراجعة ارتباطات العميل'),
+        content: Text(
+          'العميل: ${client['name']}\n\n'
+          'الفواتير المحفوظة: ${invoices.toInt()} (ستبقى مع بياناتها)\n'
+          'دفعات الفواتير: ${payments.toInt()}\n'
+          'قيود دفتر الحساب: ${ledger.toInt()}\n'
+          'الدفعات العامة: ${receipts.toInt()}\n\n'
+          '${removable > 0 ? 'يجب حذف الارتباطات القابلة للحذف أولاً.' : 'لا توجد ارتباطات قابلة للحذف.'}',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('إلغاء'),
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('حذف'),
-          ),
+          if (removable > 0)
+            FilledButton.icon(
+              onPressed: () => Navigator.pop(context, true),
+              icon: const Icon(Icons.cleaning_services_outlined),
+              label: const Text('حذف الارتباطات'),
+            )
+          else
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text('حذف العميل نهائياً'),
+            ),
         ],
       ),
     );
     if (confirmed != true) return;
     try {
-      await widget.api.request(
-        'DELETE',
-        'tenants/${widget.tenantId}/clients/${client['id']}',
-      );
+      if (removable > 0) {
+        await widget.api.request('DELETE', 'tenants/${widget.tenantId}/clients/$id/associations');
+        if (mounted) await _delete(client);
+      } else {
+        await widget.api.request('DELETE', 'tenants/${widget.tenantId}/clients/$id');
+      }
       if (mounted) widget.cubit.refresh();
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -595,6 +628,11 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                                                     balanceMinor,
                                                                 onExpired: widget
                                                                     .onExpired,
+                                                                direction:
+                                                                    balanceMinor <
+                                                                        0
+                                                                    ? 'out'
+                                                                    : 'in',
                                                               ),
                                                             );
                                                         if (saved == true &&
@@ -608,8 +646,14 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                                         size: 18,
                                                         color: teal,
                                                       ),
-                                                      label: const Text(
-                                                        'تسجيل دفعة',
+                                                      label: Text(
+                                                        ((row['balance_minor']
+                                                                            as num?)
+                                                                        ?.toInt() ??
+                                                                    0) <
+                                                                0
+                                                            ? 'سداد للعميل'
+                                                            : 'تسجيل دفعة',
                                                       ),
                                                     ),
                                                     TextButton.icon(
@@ -997,6 +1041,7 @@ class _ClientDialogState extends State<ClientDialog> {
   late final TextEditingController _balance = TextEditingController(
     text: _formatBalance(widget.client?['opening_balance_minor']),
   );
+  String _openingType = 'receivable';
   String? _error;
   bool _busy = false;
 
@@ -1010,7 +1055,7 @@ class _ClientDialogState extends State<ClientDialog> {
     final str = cents == 0
         ? '$major'
         : '$major.${cents.toString().padLeft(2, '0')}';
-    return v < 0 ? '-$str' : str;
+    return str;
   }
 
   static int? _parseBalance(String text) {
@@ -1034,6 +1079,17 @@ class _ClientDialogState extends State<ClientDialog> {
     super.dispose();
   }
 
+  @override
+  void initState() {
+    super.initState();
+    final type = widget.client?['opening_balance_type'] as String?;
+    if (type == 'payable' || type == 'receivable') {
+      _openingType = type!;
+    } else if ((widget.client?['opening_balance_minor'] as num? ?? 0) < 0) {
+      _openingType = 'payable';
+    }
+  }
+
   Future<void> _save() async {
     if (_busy || !_form.currentState!.validate()) {
       return;
@@ -1048,7 +1104,8 @@ class _ClientDialogState extends State<ClientDialog> {
           entry.key: entry.value.text.trim().isEmpty && entry.key != 'name'
               ? null
               : entry.value.text.trim(),
-        'opening_balance_minor': _parseBalance(_balance.text) ?? 0,
+        'opening_balance_minor': (_parseBalance(_balance.text) ?? 0).abs(),
+        'opening_balance_type': _openingType,
       };
       if (widget.user.isSuperAdmin && widget.client == null) {
         // Tenant creation inserts the sole trader first, before supporting admins.
@@ -1146,7 +1203,7 @@ class _ClientDialogState extends State<ClientDialog> {
                     decoration: const InputDecoration(
                       labelText: 'الرصيد الافتتاحي (ج.م.)',
                       hintText: '0.00',
-                      helperText: 'موجب: العميل مدين. سالب: أنت المدين.',
+                      helperText: 'حدد هل الرصيد مستحق لك أم مستحق على شركتك.',
                     ),
                     validator: (v) {
                       if (v != null &&
@@ -1156,6 +1213,28 @@ class _ClientDialogState extends State<ClientDialog> {
                       }
                       return null;
                     },
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: DropdownButtonFormField<String>(
+                    value: _openingType,
+                    decoration: const InputDecoration(
+                      labelText: 'نوع الرصيد الافتتاحي',
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'receivable',
+                        child: Text('العميل مدين لي'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'payable',
+                        child: Text('أنا مدين للعميل'),
+                      ),
+                    ],
+                    onChanged: _busy
+                        ? null
+                        : (value) => setState(() => _openingType = value!),
                   ),
                 ),
               ],
