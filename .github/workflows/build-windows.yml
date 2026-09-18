@@ -1,0 +1,44 @@
+name: Build Windows Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'lib/**'
+      - 'windows/**'
+      - 'pubspec.yaml'
+      - '.github/workflows/build-windows.yml'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Windows release
+        run: flutter build windows --release
+
+      - name: Archive release
+        shell: pwsh
+        run: |
+          $release = "build/windows/x64/runner/Release"
+          $archive = "musky-client-windows.zip"
+          Compress-Archive -Path "$release/*" -DestinationPath $archive -CompressionLevel Optimal
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: musky-client-windows
+          path: musky-client-windows.zip
