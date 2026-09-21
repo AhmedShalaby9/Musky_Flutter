@@ -26,20 +26,19 @@ class JournalState {
     Map<String, dynamic>? data,
     bool? initialized,
     bool? expired,
-  }) =>
-      JournalState(
-        date: date ?? this.date,
-        loading: loading ?? this.loading,
-        error: clearError ? null : (error ?? this.error),
-        data: data ?? this.data,
-        initialized: initialized ?? this.initialized,
-        expired: expired ?? this.expired,
-      );
+  }) => JournalState(
+    date: date ?? this.date,
+    loading: loading ?? this.loading,
+    error: clearError ? null : (error ?? this.error),
+    data: data ?? this.data,
+    initialized: initialized ?? this.initialized,
+    expired: expired ?? this.expired,
+  );
 }
 
 class JournalCubit extends Cubit<JournalState> {
   JournalCubit(this._api, this._tenantId)
-      : super(JournalState(date: DateTime.now()));
+    : super(JournalState(date: DateTime.now()));
 
   final MuskyApi _api;
   final int _tenantId;
@@ -57,6 +56,29 @@ class JournalCubit extends Cubit<JournalState> {
   void setDate(DateTime date) {
     emit(state.copyWith(date: date));
     _fetch(date);
+  }
+
+  Future<void> deleteReceipt({
+    required int clientId,
+    required int receiptId,
+  }) async {
+    emit(state.copyWith(loading: true, clearError: true));
+    try {
+      await _api.deleteClientReceipt(_tenantId, clientId, receiptId);
+      await _fetch(state.date);
+    } on ApiException catch (e) {
+      if (!isClosed) {
+        if (e.status == 401) {
+          emit(state.copyWith(loading: false, expired: true));
+        } else {
+          emit(state.copyWith(loading: false, error: e.message));
+        }
+      }
+    } catch (_) {
+      if (!isClosed) {
+        emit(state.copyWith(loading: false, error: 'تعذر حذف الدفعة.'));
+      }
+    }
   }
 
   Future<void> _fetch(DateTime date) async {

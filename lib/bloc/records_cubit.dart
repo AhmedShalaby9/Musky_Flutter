@@ -58,9 +58,9 @@ class RecordsCubit extends Cubit<RecordsState> {
   int _requestId = 0;
   ApiRequestCancellation? _active;
 
-  bool get _isClients => _section == 'العملاء' || _section == 'Suppliers';
+  bool get _isClients => _section == 'العملاء' || _section == 'الموردين';
   bool get _isBusinesses => _section == 'الأعمال';
-  String? get _balanceFilter => _section == 'Suppliers' ? 'receivable' : null;
+  String? get _balanceFilter => _section == 'الموردين' ? 'payable' : null;
 
   String get _path => _isBusinesses
       ? 'tenants'

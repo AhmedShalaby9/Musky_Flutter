@@ -37,7 +37,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
   final _horizontal = ScrollController();
   Timer? _searchTimer;
   bool get _clients => widget.section == 'العملاء' || _suppliers;
-  bool get _suppliers => widget.section == 'Suppliers';
+  bool get _suppliers => widget.section == 'الموردين';
   bool get _businesses => widget.section == 'الأعمال';
   bool get _team => widget.section == 'الفريق';
 
@@ -297,7 +297,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
                       Text(
                         _clients
                             ? _suppliers
-                                  ? 'العملاء الذين عليهم رصيد لك.'
+                                  ? 'الأشخاص الذين تشتري منهم وعليك رصيد لهم.'
                                   : 'الأشخاص الذين تتعامل معهم.'
                             : _businesses
                             ? 'مساحة عمل مخصصة لكل تاجر.'
@@ -425,7 +425,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                 _search.text.trim().isNotEmpty
                                     ? 'جرّب بحثاً آخر أو امسح حقل البحث.'
                                     : _suppliers
-                                    ? 'لا يوجد عملاء عليهم رصيد لك حالياً.'
+                                    ? 'لا يوجد موردون عليك رصيد لهم حالياً.'
                                     : _clients
                                     ? 'أضف أول عميل لتنظيم جهات الاتصال.'
                                     : 'حدّث الصفحة بعد إنشاء السجلات.',

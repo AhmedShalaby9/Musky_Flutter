@@ -102,6 +102,20 @@ class _RecordPickerState extends State<RecordPicker> {
     Navigator.pop(context, created);
   }
 
+  Future<void> _createClient() async {
+    final created = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => QuickClientDialog(
+        api: widget.api,
+        tenantId: widget.tenantId,
+        initialName: _search.text.trim(),
+        onExpired: widget.onExpired,
+      ),
+    );
+    if (created == null || !mounted) return;
+    Navigator.pop(context, created);
+  }
+
   @override
   Widget build(BuildContext context) => AlertDialog(
     title: Row(
@@ -181,7 +195,11 @@ class _RecordPickerState extends State<RecordPicker> {
                             icon: const Icon(Icons.add, size: 18),
                             label: const Text('إضافة منتج جديد'),
                           )
-                        : const Text('لا توجد سجلات نشطة مطابقة.'),
+                        : FilledButton.icon(
+                            onPressed: _createClient,
+                            icon: const Icon(Icons.person_add_alt_1, size: 18),
+                            label: const Text('إضافة عميل جديد'),
+                          ),
                   )
                 : ListView.separated(
                     padding: const EdgeInsets.only(bottom: 8),
@@ -297,6 +315,12 @@ class _RecordPickerState extends State<RecordPicker> {
           onPressed: _busy ? null : _createProduct,
           icon: const Icon(Icons.add, size: 18),
           label: const Text('إضافة منتج جديد'),
+        ),
+      if (!widget.products)
+        FilledButton.icon(
+          onPressed: _busy ? null : _createClient,
+          icon: const Icon(Icons.person_add_alt_1, size: 18),
+          label: const Text('إضافة عميل جديد'),
         ),
       TextButton(
         onPressed: () => Navigator.pop(context),
@@ -454,6 +478,167 @@ class _QuickProductDialogState extends State<QuickProductDialog> {
         FilledButton(
           onPressed: _busy ? null : _save,
           child: Text(_busy ? 'جارٍ الحفظ…' : 'حفظ وإضافة للفاتورة'),
+        ),
+      ],
+    ),
+  );
+}
+
+class QuickClientDialog extends StatefulWidget {
+  const QuickClientDialog({
+    super.key,
+    required this.api,
+    required this.tenantId,
+    required this.onExpired,
+    this.initialName = '',
+  });
+
+  final MuskyApi api;
+  final int tenantId;
+  final VoidCallback onExpired;
+  final String initialName;
+
+  @override
+  State<QuickClientDialog> createState() => _QuickClientDialogState();
+}
+
+class _QuickClientDialogState extends State<QuickClientDialog> {
+  final _form = GlobalKey<FormState>();
+  late final _name = TextEditingController(text: widget.initialName);
+  final _phone = TextEditingController();
+  final _address = TextEditingController();
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _phone.dispose();
+    _address.dispose();
+    super.dispose();
+  }
+
+  Map<String, dynamic> _payload({int? userId}) => {
+    'name': _name.text.trim(),
+    'phone': _phone.text.trim().isEmpty ? null : _phone.text.trim(),
+    'address': _address.text.trim(),
+    if (userId != null) 'user_id': userId,
+  };
+
+  Future<int?> _traderOwnerId() async {
+    final users = await widget.api.list('tenants/${widget.tenantId}/users');
+    for (final user in users) {
+      if (user['role'] == 'trader' && user['active'] == true) {
+        return user['id'] as int;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _save() async {
+    if (_busy || !_form.currentState!.validate()) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      Map<String, dynamic> created;
+      try {
+        created = await widget.api.request(
+          'POST',
+          'tenants/${widget.tenantId}/clients',
+          _payload(),
+        );
+      } on ApiException catch (e) {
+        if (!e.message.contains('user_id')) rethrow;
+        final ownerId = await _traderOwnerId();
+        if (ownerId == null) {
+          throw const ApiException('لا يوجد تاجر نشط لهذا النشاط.');
+        }
+        created = await widget.api.request(
+          'POST',
+          'tenants/${widget.tenantId}/clients',
+          _payload(userId: ownerId),
+        );
+      }
+      if (mounted) Navigator.pop(context, created);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      if (e.status == 401) {
+        Navigator.pop(context);
+        widget.onExpired();
+      } else {
+        setState(() => _error = e.message);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _error = 'تعذّر حفظ العميل. حاول مجدداً.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => PopScope(
+    canPop: !_busy,
+    child: AlertDialog(
+      title: const Text('إضافة عميل جديد'),
+      content: SizedBox(
+        width: 460,
+        child: SingleChildScrollView(
+          child: Form(
+            key: _form,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_error != null) ...[
+                  ErrorNotice(_error!),
+                  const SizedBox(height: 16),
+                ],
+                TextFormField(
+                  controller: _name,
+                  enabled: !_busy,
+                  autofocus: true,
+                  maxLength: 150,
+                  decoration: const InputDecoration(
+                    labelText: 'اسم العميل',
+                    counterText: '',
+                  ),
+                  validator: (v) =>
+                      v == null || v.trim().isEmpty ? 'أدخل اسم العميل.' : null,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _phone,
+                  enabled: !_busy,
+                  maxLength: 40,
+                  decoration: const InputDecoration(
+                    labelText: 'رقم الهاتف',
+                    counterText: '',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _address,
+                  enabled: !_busy,
+                  maxLength: 500,
+                  decoration: const InputDecoration(
+                    labelText: 'العنوان',
+                    counterText: '',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _busy ? null : () => Navigator.pop(context),
+          child: const Text('إلغاء'),
+        ),
+        FilledButton(
+          onPressed: _busy ? null : _save,
+          child: Text(_busy ? 'جارٍ الحفظ…' : 'حفظ واختيار العميل'),
         ),
       ],
     ),

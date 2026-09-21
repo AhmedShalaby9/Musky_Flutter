@@ -51,7 +51,7 @@ class _WorkspaceState extends State<Workspace> {
     _overviewCubit?.close();
     _journalCubit?.close();
     _clientsCubit = RecordsCubit(widget.api, 'العملاء', tenantId);
-    _suppliersCubit = RecordsCubit(widget.api, 'Suppliers', tenantId);
+    _suppliersCubit = RecordsCubit(widget.api, 'الموردين', tenantId);
     _teamCubit = RecordsCubit(widget.api, 'الفريق', tenantId);
     _productsCubit = CommerceCubit(widget.api, tenantId, products: true);
     _invoicesCubit = CommerceCubit(widget.api, tenantId, products: false);
@@ -236,7 +236,7 @@ class _WorkspaceState extends State<Workspace> {
                             enabled: _tenantId != null,
                           ),
                           nav(
-                            'Suppliers',
+                            'الموردين',
                             Icons.local_shipping_outlined,
                             enabled: _tenantId != null,
                           ),
@@ -387,13 +387,13 @@ class _WorkspaceState extends State<Workspace> {
                           onExpired: _expired,
                         ),
                         'العملاء' ||
-                        'Suppliers' ||
+                        'الموردين' ||
                         'الفريق' ||
                         'الأعمال' => RecordsScreen(
                           key: ValueKey('$_section:$_tenantId'),
                           cubit: _section == 'العملاء'
                               ? _clientsCubit!
-                              : _section == 'Suppliers'
+                              : _section == 'الموردين'
                               ? _suppliersCubit!
                               : _section == 'الفريق'
                               ? _teamCubit!

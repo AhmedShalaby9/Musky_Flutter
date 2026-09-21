@@ -47,6 +47,34 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
     return '${hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')} $period';
   }
 
+  Future<void> _deleteReceipt(Map<String, dynamic> row) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('حذف الدفعة نهائياً'),
+        content: Text(
+          'سيتم حذف دفعة ${row['client_name'] ?? ''} من دفتر اليومية وكشف حساب العميل نهائياً.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('حذف نهائي'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await widget.cubit.deleteReceipt(
+      clientId: (row['client_id'] as num).toInt(),
+      receiptId: (row['id'] as num).toInt(),
+    );
+  }
+
   Widget _journalField(
     String label,
     String value, {
@@ -75,7 +103,7 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
 
   Widget _structuredRows(List<Map<String, dynamic>> rows) => ListView.separated(
     itemCount: rows.length,
-    separatorBuilder: (_, __) => const SizedBox(height: 10),
+    separatorBuilder: (context, index) => const SizedBox(height: 10),
     itemBuilder: (_, i) {
       final p = rows[i];
       final paid = DateTime.tryParse(p['paid_at'] as String? ?? '')?.toLocal();
@@ -84,6 +112,7 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
           ? '—'
           : '${invoiceTypeLabel(p['document_type'])} INV-${(p['invoice_number'] as int).toString().padLeft(6, '0')}';
       final notes = p['notes'] as String? ?? '';
+      final receipt = p['kind'] == 'client_receipt';
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
         decoration: BoxDecoration(
@@ -116,23 +145,48 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
               ),
               _journalField('ملاحظات', notes.isEmpty ? '—' : notes),
             ];
+            final deleteButton = IconButton(
+              tooltip: 'حذف الدفعة نهائياً',
+              onPressed: receipt ? () => _deleteReceipt(p) : null,
+              icon: Icon(
+                Icons.delete_outline,
+                color: receipt ? Colors.red : line,
+              ),
+            );
             if (size.maxWidth < 760) {
-              return Wrap(
-                runSpacing: 16,
-                children: fields
-                    .map(
-                      (field) => SizedBox(
-                        width: size.maxWidth < 480
-                            ? size.maxWidth
-                            : size.maxWidth / 2,
-                        child: field,
-                      ),
-                    )
-                    .toList(),
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    runSpacing: 16,
+                    children: fields
+                        .map(
+                          (field) => SizedBox(
+                            width: size.maxWidth < 480
+                                ? size.maxWidth
+                                : size.maxWidth / 2,
+                            child: field,
+                          ),
+                        )
+                        .toList(),
+                  ),
+                  if (receipt) ...[
+                    const SizedBox(height: 8),
+                    TextButton.icon(
+                      onPressed: () => _deleteReceipt(p),
+                      icon: const Icon(Icons.delete_outline, size: 18),
+                      label: const Text('حذف نهائي'),
+                      style: TextButton.styleFrom(foregroundColor: Colors.red),
+                    ),
+                  ],
+                ],
               );
             }
             return Row(
-              children: fields.map((field) => Expanded(child: field)).toList(),
+              children: [
+                ...fields.map((field) => Expanded(child: field)),
+                deleteButton,
+              ],
             );
           },
         ),
@@ -249,67 +303,5 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
       );
     }
     return _structuredRows(rows);
-    return ListView.separated(
-      itemCount: rows.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (_, i) {
-        final p = rows[i];
-        final paid = DateTime.tryParse(
-          p['paid_at'] as String? ?? '',
-        )?.toLocal();
-        final time = paid == null ? '—' : _time(paid);
-        final invoice = p['invoice_number'] == null
-            ? '—'
-            : '${invoiceTypeLabel(p['document_type'])} INV-${(p['invoice_number'] as int).toString().padLeft(6, '0')}';
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border.all(color: line),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 65,
-                child: Text(time, textDirection: TextDirection.ltr),
-              ),
-              Expanded(
-                child: Text(
-                  p['client_name'] as String? ?? '—',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              SizedBox(
-                width: 125,
-                child: Text(invoice, textDirection: TextDirection.ltr),
-              ),
-              SizedBox(
-                width: 90,
-                child: Text(p['method'] == 'online' ? 'إلكتروني' : 'نقدي'),
-              ),
-              SizedBox(
-                width: 125,
-                child: Text(
-                  egp(p['amount_minor'] as int? ?? 0),
-                  textDirection: TextDirection.ltr,
-                  textAlign: TextAlign.left,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ),
-              Expanded(
-                child: Text(
-                  p['notes'] as String? ?? '',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: muted),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
   }
 }
