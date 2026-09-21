@@ -88,6 +88,20 @@ class _RecordPickerState extends State<RecordPicker> {
     }
   }
 
+  Future<void> _createProduct() async {
+    final created = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => QuickProductDialog(
+        api: widget.api,
+        tenantId: widget.tenantId,
+        initialTitle: _search.text.trim(),
+        onExpired: widget.onExpired,
+      ),
+    );
+    if (created == null || !mounted) return;
+    Navigator.pop(context, created);
+  }
+
   @override
   Widget build(BuildContext context) => AlertDialog(
     title: Row(
@@ -160,7 +174,15 @@ class _RecordPickerState extends State<RecordPicker> {
                     ],
                   )
                 : _rows.isEmpty
-                ? const Center(child: Text('لا توجد سجلات نشطة مطابقة.'))
+                ? Center(
+                    child: widget.products
+                        ? FilledButton.icon(
+                            onPressed: _createProduct,
+                            icon: const Icon(Icons.add, size: 18),
+                            label: const Text('إضافة منتج جديد'),
+                          )
+                        : const Text('لا توجد سجلات نشطة مطابقة.'),
+                  )
                 : ListView.separated(
                     padding: const EdgeInsets.only(bottom: 8),
                     itemCount: _rows.length,
@@ -270,11 +292,171 @@ class _RecordPickerState extends State<RecordPicker> {
       ),
     ),
     actions: [
+      if (widget.products)
+        FilledButton.icon(
+          onPressed: _busy ? null : _createProduct,
+          icon: const Icon(Icons.add, size: 18),
+          label: const Text('إضافة منتج جديد'),
+        ),
       TextButton(
         onPressed: () => Navigator.pop(context),
         child: const Text('إغلاق'),
       ),
     ],
+  );
+}
+
+class QuickProductDialog extends StatefulWidget {
+  const QuickProductDialog({
+    super.key,
+    required this.api,
+    required this.tenantId,
+    required this.onExpired,
+    this.initialTitle = '',
+  });
+
+  final MuskyApi api;
+  final int tenantId;
+  final VoidCallback onExpired;
+  final String initialTitle;
+
+  @override
+  State<QuickProductDialog> createState() => _QuickProductDialogState();
+}
+
+class _QuickProductDialogState extends State<QuickProductDialog> {
+  final _form = GlobalKey<FormState>();
+  late final _title = TextEditingController(text: widget.initialTitle);
+  final _code = TextEditingController();
+  final _quantity = TextEditingController(text: '0');
+  final _pieces = TextEditingController(text: '1');
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _code.dispose();
+    _quantity.dispose();
+    _pieces.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_busy || !_form.currentState!.validate()) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final created = await widget.api
+          .request('POST', 'tenants/${widget.tenantId}/products', {
+            'title': _title.text.trim(),
+            'code': _code.text.trim(),
+            'quantity': int.parse(_quantity.text),
+            'pieces_per_unit': int.parse(_pieces.text),
+          });
+      if (mounted) Navigator.pop(context, created);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      if (e.status == 401) {
+        Navigator.pop(context);
+        widget.onExpired();
+      } else {
+        setState(() => _error = e.message);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _error = 'تعذّر حفظ المنتج. حاول مجدداً.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => PopScope(
+    canPop: !_busy,
+    child: AlertDialog(
+      title: const Text('إضافة منتج جديد'),
+      content: SizedBox(
+        width: 460,
+        child: SingleChildScrollView(
+          child: Form(
+            key: _form,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_error != null) ...[
+                  ErrorNotice(_error!),
+                  const SizedBox(height: 16),
+                ],
+                TextFormField(
+                  controller: _title,
+                  enabled: !_busy,
+                  autofocus: true,
+                  decoration: const InputDecoration(labelText: 'اسم المنتج'),
+                  validator: (v) =>
+                      v == null || v.trim().isEmpty ? 'أدخل اسم المنتج.' : null,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _code,
+                  enabled: !_busy,
+                  decoration: const InputDecoration(labelText: 'الكود'),
+                  validator: (v) =>
+                      v == null || v.trim().isEmpty ? 'أدخل كود المنتج.' : null,
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: _quantity,
+                        enabled: !_busy,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'الكمية بالمخزون',
+                        ),
+                        validator: (v) {
+                          final n = int.tryParse(v ?? '');
+                          return n == null || n < 0 ? 'أدخل كمية صحيحة.' : null;
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _pieces,
+                        enabled: !_busy,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'القطع / الحزمة',
+                        ),
+                        validator: (v) {
+                          final n = int.tryParse(v ?? '');
+                          return n == null || n < 1
+                              ? 'أدخل رقماً صحيحاً.'
+                              : null;
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _busy ? null : () => Navigator.pop(context),
+          child: const Text('إلغاء'),
+        ),
+        FilledButton(
+          onPressed: _busy ? null : _save,
+          child: Text(_busy ? 'جارٍ الحفظ…' : 'حفظ وإضافة للفاتورة'),
+        ),
+      ],
+    ),
   );
 }
 

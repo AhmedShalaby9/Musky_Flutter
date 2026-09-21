@@ -67,8 +67,10 @@ class _CommerceScreenState extends State<CommerceScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('حذف المنتج'),
-        content: Text('هل تريد حذف "${product['title']}" نهائياً؟'),
+        title: const Text('حذف المنتج نهائياً'),
+        content: Text(
+          'سيتم حذف "${product['title']}" من المنتجات نهائياً. إذا كان المنتج مستخدماً في فواتير سابقة فلن يمكن حذفه للحفاظ على السجل.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -77,7 +79,7 @@ class _CommerceScreenState extends State<CommerceScreen> {
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('حذف'),
+            child: const Text('حذف نهائي'),
           ),
         ],
       ),
@@ -85,11 +87,32 @@ class _CommerceScreenState extends State<CommerceScreen> {
     if (confirmed != true) return;
     try {
       await widget.api.request('DELETE', '$_base/${product['id']}');
-      if (mounted) widget.cubit.refresh();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('تم حذف المنتج نهائياً.')));
+      widget.cubit.refresh();
     } on ApiException catch (e) {
       if (!mounted) return;
-      if (e.status == 401) widget.onExpired();
-    } catch (_) {}
+      if (e.status == 401) {
+        widget.onExpired();
+        return;
+      }
+      final message = e.status == 409
+          ? 'لا يمكن حذف المنتج لأنه مستخدم في فواتير أو حركة مخزون. يمكن أرشفته بدلاً من ذلك.'
+          : e.message;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.red),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('تعذّر حذف المنتج. حاول مرة أخرى.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Future<void> _toggle(Map<String, dynamic> product) async {

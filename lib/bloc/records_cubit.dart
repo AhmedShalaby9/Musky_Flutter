@@ -34,22 +34,23 @@ class RecordsState {
     Object? daysFilter = _keep,
     bool? initialized,
     bool? expired,
-  }) =>
-      RecordsState(
-        loading: loading ?? this.loading,
-        error: clearError ? null : (error ?? this.error),
-        rows: rows ?? this.rows,
-        offset: offset ?? this.offset,
-        searchQuery: searchQuery ?? this.searchQuery,
-        daysFilter: identical(daysFilter, _keep) ? this.daysFilter : daysFilter as int?,
-        initialized: initialized ?? this.initialized,
-        expired: expired ?? this.expired,
-      );
+  }) => RecordsState(
+    loading: loading ?? this.loading,
+    error: clearError ? null : (error ?? this.error),
+    rows: rows ?? this.rows,
+    offset: offset ?? this.offset,
+    searchQuery: searchQuery ?? this.searchQuery,
+    daysFilter: identical(daysFilter, _keep)
+        ? this.daysFilter
+        : daysFilter as int?,
+    initialized: initialized ?? this.initialized,
+    expired: expired ?? this.expired,
+  );
 }
 
 class RecordsCubit extends Cubit<RecordsState> {
   RecordsCubit(this._api, this._section, this._tenantId)
-      : super(const RecordsState());
+    : super(const RecordsState());
 
   final MuskyApi _api;
   final String _section;
@@ -57,8 +58,9 @@ class RecordsCubit extends Cubit<RecordsState> {
   int _requestId = 0;
   ApiRequestCancellation? _active;
 
-  bool get _isClients => _section == 'العملاء';
+  bool get _isClients => _section == 'العملاء' || _section == 'Suppliers';
   bool get _isBusinesses => _section == 'الأعمال';
+  String? get _balanceFilter => _section == 'Suppliers' ? 'receivable' : null;
 
   String get _path => _isBusinesses
       ? 'tenants'
@@ -70,19 +72,31 @@ class RecordsCubit extends Cubit<RecordsState> {
     }
   }
 
-  void refresh() =>
-      _fetch(offset: state.offset, q: state.searchQuery, daysFilter: state.daysFilter);
+  void refresh() => _fetch(
+    offset: state.offset,
+    q: state.searchQuery,
+    daysFilter: state.daysFilter,
+  );
 
-  void search(String q) => _fetch(offset: 0, q: q, daysFilter: state.daysFilter);
+  void search(String q) =>
+      _fetch(offset: 0, q: q, daysFilter: state.daysFilter);
 
-  void filterDays(int? days) => _fetch(offset: 0, q: state.searchQuery, daysFilter: days);
+  void filterDays(int? days) =>
+      _fetch(offset: 0, q: state.searchQuery, daysFilter: days);
 
-  void nextPage() =>
-      _fetch(offset: state.offset + 50, q: state.searchQuery, daysFilter: state.daysFilter);
+  void nextPage() => _fetch(
+    offset: state.offset + 50,
+    q: state.searchQuery,
+    daysFilter: state.daysFilter,
+  );
 
   void prevPage() {
     if (state.offset == 0) return;
-    _fetch(offset: state.offset - 50, q: state.searchQuery, daysFilter: state.daysFilter);
+    _fetch(
+      offset: state.offset - 50,
+      q: state.searchQuery,
+      daysFilter: state.daysFilter,
+    );
   }
 
   Future<void> _fetch({
@@ -102,17 +116,20 @@ class RecordsCubit extends Cubit<RecordsState> {
         offset: offset,
         q: _isClients ? q : '',
         daysWithoutPayment: _isClients ? daysFilter : null,
+        balance: _isClients ? _balanceFilter : null,
         cancellation: cancel,
       );
       if (_requestId == id && !isClosed) {
-        emit(state.copyWith(
-          loading: false,
-          rows: rows,
-          offset: offset,
-          searchQuery: q,
-          daysFilter: daysFilter,
-          initialized: true,
-        ));
+        emit(
+          state.copyWith(
+            loading: false,
+            rows: rows,
+            offset: offset,
+            searchQuery: q,
+            daysFilter: daysFilter,
+            initialized: true,
+          ),
+        );
       }
     } on ApiException catch (e) {
       if (_requestId == id && !isClosed) {
@@ -126,7 +143,12 @@ class RecordsCubit extends Cubit<RecordsState> {
       // cancelled — ignore
     } catch (_) {
       if (_requestId == id && !isClosed) {
-        emit(state.copyWith(loading: false, error: 'تعذّر تحميل السجلات. حاول مجدداً.'));
+        emit(
+          state.copyWith(
+            loading: false,
+            error: 'تعذّر تحميل السجلات. حاول مجدداً.',
+          ),
+        );
       }
     }
   }

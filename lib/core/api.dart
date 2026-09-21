@@ -83,6 +83,7 @@ abstract class MuskyApi {
     int offset = 0,
     String q = '',
     int? daysWithoutPayment,
+    String? balance,
     ApiRequestCancellation? cancellation,
   });
   Future<void> saveClient(int tenantId, Map<String, dynamic> data, {int? id});
@@ -118,6 +119,7 @@ abstract class MuskyApi {
     String notes, {
     String direction = 'in',
   });
+  Future<void> deleteClientReceipt(int tenantId, int clientId, int receiptId);
   Future<Map<String, dynamic>> clientLedger(
     int tenantId,
     int clientId, {
@@ -354,12 +356,16 @@ class HttpMuskyApi implements MuskyApi {
     int offset = 0,
     String q = '',
     int? daysWithoutPayment,
+    String? balance,
     ApiRequestCancellation? cancellation,
   }) async {
     var url = '$path?limit=50&offset=$offset';
     if (q.isNotEmpty) url += '&q=${Uri.encodeQueryComponent(q)}';
     if (daysWithoutPayment != null)
       url += '&days_without_payment=$daysWithoutPayment';
+    if (balance != null && balance.isNotEmpty) {
+      url += '&balance=${Uri.encodeQueryComponent(balance)}';
+    }
     final data = cancellation == null
         ? await _request('GET', url)
         : await _requestWithCancellation(
@@ -519,12 +525,28 @@ class HttpMuskyApi implements MuskyApi {
     String method,
     String notes, {
     String direction = 'in',
-  }) => _request('PATCH', 'tenants/$tenantId/clients/$clientId/receipts/$receiptId', {
-    'amount_minor': amountMinor,
-    'method': method,
-    'notes': notes,
-    'direction': direction,
-  });
+  }) => _request(
+    'PATCH',
+    'tenants/$tenantId/clients/$clientId/receipts/$receiptId',
+    {
+      'amount_minor': amountMinor,
+      'method': method,
+      'notes': notes,
+      'direction': direction,
+    },
+  );
+
+  @override
+  Future<void> deleteClientReceipt(
+    int tenantId,
+    int clientId,
+    int receiptId,
+  ) async {
+    await _request(
+      'DELETE',
+      'tenants/$tenantId/clients/$clientId/receipts/$receiptId',
+    );
+  }
 
   @override
   Future<Map<String, dynamic>> clientLedger(

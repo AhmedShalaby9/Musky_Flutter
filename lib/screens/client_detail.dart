@@ -231,11 +231,11 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-            onTap: invoice
-                ? () => _openInvoice((entry['ref_id'] as num).toInt())
-                : editableReceipt
-                    ? () => _editReceipt(entry)
-                    : null,
+          onTap: invoice
+              ? () => _openInvoice((entry['ref_id'] as num).toInt())
+              : editableReceipt
+              ? () => _editReceipt(entry)
+              : null,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
             decoration: BoxDecoration(
@@ -518,7 +518,11 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
     super.initState();
     final receipt = widget.receipt;
     if (receipt != null) {
-      final amount = ((receipt['amount_minor'] as num?) ?? (receipt['delta_minor'] as num?)?.abs() ?? 0).toInt();
+      final amount =
+          ((receipt['amount_minor'] as num?) ??
+                  (receipt['delta_minor'] as num?)?.abs() ??
+                  0)
+              .toInt();
       _amount.text = (amount / 100).toStringAsFixed(2);
       _notes.text = '${receipt['notes'] ?? ''}';
       _method = receipt['method'] as String? ?? 'cash';
@@ -545,9 +549,24 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
         return;
       }
       if (widget.receipt == null) {
-        await widget.api.createClientReceipt(widget.tenantId, widget.clientId, amountMinor, _method, _notes.text.trim(), direction: widget.direction);
+        await widget.api.createClientReceipt(
+          widget.tenantId,
+          widget.clientId,
+          amountMinor,
+          _method,
+          _notes.text.trim(),
+          direction: widget.direction,
+        );
       } else {
-        await widget.api.updateClientReceipt(widget.tenantId, widget.clientId, (widget.receipt!['ref_id'] as num).toInt(), amountMinor, _method, _notes.text.trim(), direction: widget.direction);
+        await widget.api.updateClientReceipt(
+          widget.tenantId,
+          widget.clientId,
+          (widget.receipt!['ref_id'] as num).toInt(),
+          amountMinor,
+          _method,
+          _notes.text.trim(),
+          direction: widget.direction,
+        );
       }
       if (mounted) Navigator.pop(context, true);
     } on ApiException catch (e) {
@@ -565,13 +584,67 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
     }
   }
 
+  Future<void> _delete() async {
+    final receipt = widget.receipt;
+    if (_busy || receipt == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('حذف الدفعة نهائياً'),
+        content: const Text(
+          'سيتم حذف هذه الدفعة من كشف حساب العميل نهائياً ولن تظهر في كشف الحساب.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('حذف نهائي'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await widget.api.deleteClientReceipt(
+        widget.tenantId,
+        widget.clientId,
+        (receipt['ref_id'] as num).toInt(),
+      );
+      if (mounted) Navigator.pop(context, true);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      if (e.status == 401) {
+        Navigator.pop(context);
+        widget.onExpired();
+      } else {
+        setState(() => _error = e.message);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'تعذّر حذف الدفعة. حاول مجدداً.');
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) => PopScope(
     canPop: !_busy,
     child: AlertDialog(
       title: Text(
         widget.receipt == null
-            ? (widget.direction == 'out' ? 'سداد للعميل' : 'تسجيل دفعة من العميل')
+            ? (widget.direction == 'out'
+                  ? 'سداد للعميل'
+                  : 'تسجيل دفعة من العميل')
             : 'تعديل الدفعة',
       ),
       content: SizedBox(
@@ -634,13 +707,26 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
         ),
       ),
       actions: [
+        if (widget.receipt != null)
+          TextButton.icon(
+            onPressed: _busy ? null : _delete,
+            icon: const Icon(Icons.delete_outline, size: 18),
+            label: const Text('حذف نهائي'),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+          ),
         TextButton(
           onPressed: _busy ? null : () => Navigator.pop(context),
           child: const Text('إلغاء'),
         ),
         FilledButton(
           onPressed: _busy ? null : _save,
-          child: Text(_busy ? 'جارٍ الحفظ…' : widget.receipt == null ? 'تسجيل' : 'حفظ التعديل'),
+          child: Text(
+            _busy
+                ? 'جارٍ الحفظ…'
+                : widget.receipt == null
+                ? 'تسجيل'
+                : 'حفظ التعديل',
+          ),
         ),
       ],
     ),

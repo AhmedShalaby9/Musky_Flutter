@@ -36,7 +36,8 @@ class _RecordsScreenState extends State<RecordsScreen> {
   final _search = TextEditingController();
   final _horizontal = ScrollController();
   Timer? _searchTimer;
-  bool get _clients => widget.section == 'العملاء';
+  bool get _clients => widget.section == 'العملاء' || _suppliers;
+  bool get _suppliers => widget.section == 'Suppliers';
   bool get _businesses => widget.section == 'الأعمال';
   bool get _team => widget.section == 'الفريق';
 
@@ -94,10 +95,14 @@ class _RecordsScreenState extends State<RecordsScreen> {
       if (e.status == 401 && mounted) widget.onExpired();
       return;
     }
-    final invoices = (associations['Invoices'] ?? associations['invoices'] ?? 0) as num;
-    final payments = (associations['Payments'] ?? associations['payments'] ?? 0) as num;
-    final ledger = (associations['Ledger'] ?? associations['ledger'] ?? 0) as num;
-    final receipts = (associations['Receipts'] ?? associations['receipts'] ?? 0) as num;
+    final invoices =
+        (associations['Invoices'] ?? associations['invoices'] ?? 0) as num;
+    final payments =
+        (associations['Payments'] ?? associations['payments'] ?? 0) as num;
+    final ledger =
+        (associations['Ledger'] ?? associations['ledger'] ?? 0) as num;
+    final receipts =
+        (associations['Receipts'] ?? associations['receipts'] ?? 0) as num;
     final removable = payments.toInt() + ledger.toInt() + receipts.toInt();
     final confirmed = await showDialog<bool>(
       context: context,
@@ -134,10 +139,16 @@ class _RecordsScreenState extends State<RecordsScreen> {
     if (confirmed != true) return;
     try {
       if (removable > 0) {
-        await widget.api.request('DELETE', 'tenants/${widget.tenantId}/clients/$id/associations');
+        await widget.api.request(
+          'DELETE',
+          'tenants/${widget.tenantId}/clients/$id/associations',
+        );
         if (mounted) await _delete(client);
       } else {
-        await widget.api.request('DELETE', 'tenants/${widget.tenantId}/clients/$id');
+        await widget.api.request(
+          'DELETE',
+          'tenants/${widget.tenantId}/clients/$id',
+        );
       }
       if (mounted) widget.cubit.refresh();
     } on ApiException catch (e) {
@@ -285,7 +296,9 @@ class _RecordsScreenState extends State<RecordsScreen> {
                       const SizedBox(height: 8),
                       Text(
                         _clients
-                            ? 'الأشخاص الذين تتعامل معهم.'
+                            ? _suppliers
+                                  ? 'العملاء الذين عليهم رصيد لك.'
+                                  : 'الأشخاص الذين تتعامل معهم.'
                             : _businesses
                             ? 'مساحة عمل مخصصة لكل تاجر.'
                             : 'الأشخاص الذين يصلون إلى مساحة العمل.',
@@ -294,7 +307,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
                     ],
                   ),
                 ),
-                if (_clients)
+                if (_clients && !_suppliers)
                   FilledButton.icon(
                     onPressed: loading ? null : () => _edit(),
                     icon: const Icon(Icons.add, size: 19),
@@ -411,6 +424,8 @@ class _RecordsScreenState extends State<RecordsScreen> {
                               Text(
                                 _search.text.trim().isNotEmpty
                                     ? 'جرّب بحثاً آخر أو امسح حقل البحث.'
+                                    : _suppliers
+                                    ? 'لا يوجد عملاء عليهم رصيد لك حالياً.'
                                     : _clients
                                     ? 'أضف أول عميل لتنظيم جهات الاتصال.'
                                     : 'حدّث الصفحة بعد إنشاء السجلات.',

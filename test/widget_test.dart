@@ -166,10 +166,23 @@ class FakeApi implements MuskyApi {
     int clientId,
     int amountMinor,
     String method,
-    String notes,
-  ) async => {};
+    String notes, {
+    String direction = 'in',
+  }) async => {};
 
-  Future<void> reverseClientReceipt(
+  @override
+  Future<Map<String, dynamic>> updateClientReceipt(
+    int tenantId,
+    int clientId,
+    int receiptId,
+    int amountMinor,
+    String method,
+    String notes, {
+    String direction = 'in',
+  }) async => {};
+
+  @override
+  Future<void> deleteClientReceipt(
     int tenantId,
     int clientId,
     int receiptId,
@@ -260,6 +273,7 @@ class FakeApi implements MuskyApi {
     int offset = 0,
     String q = '',
     int? daysWithoutPayment,
+    String? balance,
     ApiRequestCancellation? cancellation,
   }) async {
     paths.add(path);

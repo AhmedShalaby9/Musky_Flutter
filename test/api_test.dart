@@ -49,11 +49,17 @@ void main() {
     final user = await api.login(' user@example.com ', 'password');
     expect(user.tenantId, 7);
     await api.list('tenants/7/clients', offset: 50);
+    await api.list('tenants/7/clients', balance: 'receivable');
     await api.logout();
     await api.list('tenants/7/clients');
     expect(requests[1], '/api/v1/tenants/7/clients?limit=50&offset=50');
+    expect(
+      requests[2],
+      '/api/v1/tenants/7/clients?limit=50&offset=0&balance=receivable',
+    );
     expect(authorization, [
       null,
+      'Bearer test-token',
       'Bearer test-token',
       'Bearer test-token',
       null,
