@@ -221,7 +221,9 @@ class _CommerceScreenState extends State<CommerceScreen> {
     required bool from,
     required CommerceState state,
   }) async {
-    final current = DateTime.tryParse(from ? state.fromDate : state.toDate);
+    final fromDate = state.fromDate ?? '';
+    final toDate = state.toDate ?? '';
+    final current = DateTime.tryParse(from ? fromDate : toDate);
     final picked = await showDatePicker(
       context: context,
       initialDate: current ?? DateTime.now(),
@@ -232,8 +234,8 @@ class _CommerceScreenState extends State<CommerceScreen> {
     final value =
         '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
     widget.cubit.filterDates(
-      from: from ? value : state.fromDate,
-      to: from ? state.toDate : value,
+      from: from ? value : fromDate,
+      to: from ? toDate : value,
     );
   }
 
@@ -667,17 +669,17 @@ class _CommerceScreenState extends State<CommerceScreen> {
                                   size: 18,
                                 ),
                                 label: Text(
-                                  _dateLabel(state.fromDate, 'من تاريخ'),
+                                  _dateLabel(state.fromDate ?? '', 'من تاريخ'),
                                 ),
                               ),
-                              if (state.fromDate.isNotEmpty)
+                              if ((state.fromDate ?? '').isNotEmpty)
                                 IconButton(
                                   tooltip: 'مسح تاريخ البداية',
                                   onPressed: busy
                                       ? null
                                       : () => widget.cubit.filterDates(
                                           from: '',
-                                          to: state.toDate,
+                                          to: state.toDate ?? '',
                                         ),
                                   icon: const Icon(Icons.close),
                                 ),
@@ -691,16 +693,16 @@ class _CommerceScreenState extends State<CommerceScreen> {
                                       ),
                                 icon: const Icon(Icons.event, size: 18),
                                 label: Text(
-                                  _dateLabel(state.toDate, 'إلى تاريخ'),
+                                  _dateLabel(state.toDate ?? '', 'إلى تاريخ'),
                                 ),
                               ),
-                              if (state.toDate.isNotEmpty)
+                              if ((state.toDate ?? '').isNotEmpty)
                                 IconButton(
                                   tooltip: 'مسح تاريخ النهاية',
                                   onPressed: busy
                                       ? null
                                       : () => widget.cubit.filterDates(
-                                          from: state.fromDate,
+                                          from: state.fromDate ?? '',
                                           to: '',
                                         ),
                                   icon: const Icon(Icons.close),

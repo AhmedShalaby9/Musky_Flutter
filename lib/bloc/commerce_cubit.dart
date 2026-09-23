@@ -26,8 +26,10 @@ class CommerceState {
   // Nullable while hot reload transitions an existing state instance created
   // before this filter was introduced. New states always initialize it to ''.
   final String? documentTypeFilter;
-  final String fromDate;
-  final String toDate;
+  // Nullable while hot reload transitions an existing state instance created
+  // before these filters were introduced. New states always initialize them.
+  final String? fromDate;
+  final String? toDate;
   final bool expired;
 
   CommerceState copyWith({
@@ -51,8 +53,8 @@ class CommerceState {
     searchQuery: searchQuery ?? this.searchQuery,
     statusFilter: statusFilter ?? this.statusFilter,
     documentTypeFilter: documentTypeFilter ?? this.documentTypeFilter ?? '',
-    fromDate: fromDate ?? this.fromDate,
-    toDate: toDate ?? this.toDate,
+    fromDate: fromDate ?? this.fromDate ?? '',
+    toDate: toDate ?? this.toDate ?? '',
     expired: expired ?? this.expired,
   );
 }
@@ -74,8 +76,8 @@ class CommerceCubit extends Cubit<CommerceState> {
     q: state.searchQuery,
     status: state.statusFilter,
     documentType: state.documentTypeFilter ?? '',
-    from: state.fromDate,
-    to: state.toDate,
+    from: state.fromDate ?? '',
+    to: state.toDate ?? '',
   );
 
   void search(String q) => _fetch(
@@ -83,8 +85,8 @@ class CommerceCubit extends Cubit<CommerceState> {
     q: q,
     status: state.statusFilter,
     documentType: state.documentTypeFilter ?? '',
-    from: state.fromDate,
-    to: state.toDate,
+    from: state.fromDate ?? '',
+    to: state.toDate ?? '',
   );
 
   void filterStatus(String status) => _fetch(
@@ -92,8 +94,8 @@ class CommerceCubit extends Cubit<CommerceState> {
     q: state.searchQuery,
     status: status,
     documentType: state.documentTypeFilter ?? '',
-    from: state.fromDate,
-    to: state.toDate,
+    from: state.fromDate ?? '',
+    to: state.toDate ?? '',
   );
 
   void filterDocumentType(String documentType) => _fetch(
@@ -101,8 +103,8 @@ class CommerceCubit extends Cubit<CommerceState> {
     q: state.searchQuery,
     status: state.statusFilter,
     documentType: documentType,
-    from: state.fromDate,
-    to: state.toDate,
+    from: state.fromDate ?? '',
+    to: state.toDate ?? '',
   );
 
   void filterDates({required String from, required String to}) => _fetch(
@@ -119,8 +121,8 @@ class CommerceCubit extends Cubit<CommerceState> {
     q: state.searchQuery,
     status: state.statusFilter,
     documentType: state.documentTypeFilter ?? '',
-    from: state.fromDate,
-    to: state.toDate,
+    from: state.fromDate ?? '',
+    to: state.toDate ?? '',
   );
 
   void prevPage() {
@@ -130,8 +132,8 @@ class CommerceCubit extends Cubit<CommerceState> {
       q: state.searchQuery,
       status: state.statusFilter,
       documentType: state.documentTypeFilter ?? '',
-      from: state.fromDate,
-      to: state.toDate,
+      from: state.fromDate ?? '',
+      to: state.toDate ?? '',
     );
   }
 
