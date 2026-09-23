@@ -704,6 +704,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
   late final _notes = TextEditingController(
     text: widget.invoice?['notes'] as String? ?? '',
   );
+  final _initialPayment = TextEditingController();
   final List<_Line> _lines = [];
   int? _clientId;
   String? _clientName, _error;
@@ -735,6 +736,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
   void dispose() {
     _date.dispose();
     _notes.dispose();
+    _initialPayment.dispose();
     for (final line in _lines) {
       line.dispose();
     }
@@ -811,8 +813,17 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
       return;
     }
     final total = _lines.fold<int>(0, (sum, line) => sum + line.total);
+    final initialPaymentMinor = parseMoney(_initialPayment.text.trim()) ?? 0;
     if (total > 100000000000000) {
       setState(() => _error = 'إجمالي الفاتورة يتجاوز الحد المسموح به.');
+      return;
+    }
+    if (widget.invoice == null &&
+        initialPaymentMinor > 0 &&
+        initialPaymentMinor > total) {
+      setState(
+        () => _error = 'المدفوع لا يمكن أن يكون أكبر من إجمالي الفاتورة.',
+      );
       return;
     }
     setState(() {
@@ -842,7 +853,11 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
         },
       );
       if (mounted) {
-        Navigator.pop(context, result);
+        Navigator.pop(context, {
+          ...result,
+          if (widget.invoice == null && initialPaymentMinor > 0)
+            'initial_payment_minor': initialPaymentMinor,
+        });
       }
     } on ApiException catch (e) {
       if (mounted) {
@@ -1128,6 +1143,41 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                   ),
                 ),
                 const SizedBox(height: 24),
+                if (widget.invoice == null) ...[
+                  SizedBox(
+                    width: 260,
+                    child: TextFormField(
+                      controller: _initialPayment,
+                      enabled: !_busy,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: _type == 'purchase'
+                            ? 'المدفوع للمورد الآن (اختياري)'
+                            : 'المدفوع من العميل الآن (اختياري)',
+                        hintText: '0.00',
+                      ),
+                      validator: (value) {
+                        final text = value?.trim() ?? '';
+                        if (text.isEmpty) return null;
+                        final amount = parseMoney(text);
+                        if (amount == null || amount < 0) {
+                          return 'أدخل مبلغاً صحيحاً.';
+                        }
+                        final total = _lines.fold<int>(
+                          0,
+                          (sum, line) => sum + line.total,
+                        );
+                        if (amount > total) {
+                          return 'المدفوع أكبر من الإجمالي.';
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(

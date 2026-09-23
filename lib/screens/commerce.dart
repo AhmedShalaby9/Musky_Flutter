@@ -156,8 +156,44 @@ class _CommerceScreenState extends State<CommerceScreen> {
       ),
     );
     if (saved != null && mounted) {
+      final initialPayment =
+          (saved['initial_payment_minor'] as num?)?.toInt() ?? 0;
+      Map<String, dynamic> invoice = saved;
+      if (initialPayment > 0) {
+        try {
+          invoice = await widget.api.request(
+            'POST',
+            'tenants/${widget.tenantId}/invoices/${saved['id']}/post',
+            {'version': saved['version']},
+          );
+          await widget.api.recordPayment(
+            widget.tenantId,
+            saved['id'] as int,
+            initialPayment,
+            'cash',
+            'دفعة عند إنشاء الفاتورة',
+          );
+        } on ApiException catch (e) {
+          if (!mounted) return;
+          if (e.status == 401) {
+            widget.onExpired();
+            return;
+          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+          );
+        } catch (_) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('تم حفظ المسودة، لكن تعذّر تسجيل الدفعة.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
       widget.cubit.refresh();
-      if (mounted) await _openInvoice(saved['id'] as int);
+      if (mounted) await _openInvoice(invoice['id'] as int);
     }
   }
 
