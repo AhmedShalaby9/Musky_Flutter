@@ -42,6 +42,44 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
     super.dispose();
   }
 
+  List<Map<String, dynamic>> _normalizedLedgerEntries(
+    Map<String, dynamic> client,
+    List<Map<String, dynamic>> entries,
+  ) {
+    if (entries.isEmpty || entries.first['kind'] != 'opening') {
+      return entries;
+    }
+    final balanceMinor = (client['balance_minor'] as num?)?.toInt();
+    final openingMinor = (entries.first['delta_minor'] as num?)?.toInt();
+    if (balanceMinor == null || openingMinor == null || openingMinor <= 0) {
+      return entries;
+    }
+
+    final movementMinor = entries
+        .skip(1)
+        .fold<int>(
+          0,
+          (sum, entry) => sum + ((entry['delta_minor'] as num?)?.toInt() ?? 0),
+        );
+    if (balanceMinor != movementMinor - openingMinor) {
+      return entries;
+    }
+
+    var running = 0;
+    return [
+      for (var i = 0; i < entries.length; i++)
+        () {
+          final entry = Map<String, dynamic>.from(entries[i]);
+          final rawDelta = (entry['delta_minor'] as num?)?.toInt() ?? 0;
+          final delta = i == 0 ? -rawDelta : rawDelta;
+          running += delta;
+          entry['delta_minor'] = delta;
+          entry['running_balance'] = running;
+          return entry;
+        }(),
+    ];
+  }
+
   Future<void> _load() async {
     setState(() {
       _loading = true;
@@ -54,9 +92,11 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
         cancellation: _loadCancellation,
       );
       if (!mounted) return;
+      final client = data['client'] as Map<String, dynamic>;
+      final entries = (data['entries'] as List).cast<Map<String, dynamic>>();
       setState(() {
-        _client = data['client'] as Map<String, dynamic>;
-        _entries = (data['entries'] as List).cast<Map<String, dynamic>>();
+        _client = client;
+        _entries = _normalizedLedgerEntries(client, entries);
       });
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -66,8 +106,9 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
         setState(() => _error = e.message);
       }
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(() => _error = 'تعذّر تحميل كشف الحساب. حاول مجدداً.');
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -146,6 +187,8 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
       case 'void':
       case 'purchase_void':
         return 'إلغاء فاتورة $type';
+      case 'return':
+        return 'مرتجع فاتورة $type';
       case 'invoice_payment':
         final num = entry['invoice_number'];
         if (num != null) {
@@ -669,15 +712,21 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                   decoration: InputDecoration(
                     labelText: 'المبلغ (ج.م.)',
                     hintText: '0.00',
-                    helperText: 'الحد الأقصى: ${egp(widget.balanceMinor)}',
+                    helperText:
+                        'الحد الأقصى: ${egp(widget.balanceMinor.abs())}',
                   ),
                   validator: (v) {
-                    if (v == null || v.trim().isEmpty) return 'أدخل المبلغ.';
+                    if (v == null || v.trim().isEmpty) {
+                      return 'أدخل المبلغ.';
+                    }
                     final minor = parseMoney(v);
-                    if (minor == null || minor <= 0)
+                    if (minor == null || minor <= 0) {
                       return 'أدخل مبلغاً صحيحاً.';
-                    if (widget.receipt == null && minor > widget.balanceMinor)
+                    }
+                    if (widget.receipt == null &&
+                        minor > widget.balanceMinor.abs()) {
                       return 'المبلغ أكبر من الرصيد.';
+                    }
                     return null;
                   },
                 ),

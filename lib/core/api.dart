@@ -94,6 +94,11 @@ abstract class MuskyApi {
     String method,
     String notes,
   );
+  Future<Map<String, dynamic>> createInvoiceReturn(
+    int tenantId,
+    int invoiceId,
+    Map<String, dynamic> data,
+  );
   Future<Map<String, dynamic>> createTenant(
     String name,
     String traderName,
@@ -405,6 +410,13 @@ class HttpMuskyApi implements MuskyApi {
     'method': method,
     'notes': notes,
   });
+
+  @override
+  Future<Map<String, dynamic>> createInvoiceReturn(
+    int tenantId,
+    int invoiceId,
+    Map<String, dynamic> data,
+  ) => _request('POST', 'tenants/$tenantId/invoices/$invoiceId/returns', data);
 
   @override
   Future<Map<String, dynamic>> createTenant(

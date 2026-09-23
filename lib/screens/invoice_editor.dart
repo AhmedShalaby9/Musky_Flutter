@@ -1350,6 +1350,42 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
     }
   }
 
+  Future<void> _deleteCancelled() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('حذف الفاتورة نهائياً؟'),
+        content: const Text(
+          'سيتم حذف هذه الفاتورة الملغاة نهائياً ولن تظهر في قائمة الفواتير.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('حذف نهائي'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await widget.api.request('DELETE', '$_path/permanent');
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      _handle(e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _payment() async {
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -1373,6 +1409,30 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
         result['notes'] as String,
       );
       await _load();
+    } catch (e) {
+      _handle(e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _returnRequest() async {
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => ReturnRequestDialog(invoice: _invoice!),
+    );
+    if (result == null || !mounted) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final data = await widget.api.createInvoiceReturn(
+        widget.tenantId,
+        widget.invoiceId,
+        result,
+      );
+      if (mounted) setState(() => _invoice = data);
     } catch (e) {
       _handle(e);
     } finally {
@@ -1602,6 +1662,23 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
                           'المتبقي: ${egp((_invoice!['remaining_minor'] as int?) ?? (_invoice!['total_minor'] as int))}',
                         ),
                       ],
+                      if ((_invoice!['returns'] as List?)?.isNotEmpty ==
+                          true) ...[
+                        const SizedBox(height: 18),
+                        Text(
+                          'المرتجعات',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 8),
+                        for (final row in _invoice!['returns'] as List)
+                          ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(Icons.assignment_return),
+                            title: Text(egp(row['amount_minor'] as int)),
+                            subtitle: Text('${row['reason'] ?? ''}'),
+                          ),
+                      ],
                       if ('${_invoice!['notes']}'.isNotEmpty) ...[
                         const SizedBox(height: 20),
                         Text('ملاحظات: ${_invoice!['notes']}'),
@@ -1655,10 +1732,23 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
             onPressed: _busy ? null : _payment,
             child: const Text('تسجيل دفعة'),
           ),
+        if (_invoice?['status'] == 'posted' &&
+            _invoice?['document_type'] == 'sale')
+          OutlinedButton.icon(
+            onPressed: _busy ? null : _returnRequest,
+            icon: const Icon(Icons.assignment_return_outlined),
+            label: const Text('تسجيل مرتجع'),
+          ),
         if (_invoice?['status'] == 'void' || _invoice?['status'] == 'cancelled')
           OutlinedButton(
             onPressed: _busy ? null : () => _transition('reactivate'),
             child: const Text('إعادة تفعيل الفاتورة'),
+          ),
+        if (_invoice?['status'] == 'cancelled')
+          OutlinedButton.icon(
+            onPressed: _busy ? null : _deleteCancelled,
+            icon: const Icon(Icons.delete_forever_outlined),
+            label: const Text('حذف نهائي'),
           ),
         if (_invoice?['status'] == 'posted')
           OutlinedButton(
@@ -1675,6 +1765,139 @@ class PaymentDialog extends StatefulWidget {
   final int remainingMinor;
   @override
   State<PaymentDialog> createState() => _PaymentDialogState();
+}
+
+class ReturnRequestDialog extends StatefulWidget {
+  const ReturnRequestDialog({super.key, required this.invoice});
+  final Map<String, dynamic> invoice;
+  @override
+  State<ReturnRequestDialog> createState() => _ReturnRequestDialogState();
+}
+
+class _ReturnRequestDialogState extends State<ReturnRequestDialog> {
+  final _form = GlobalKey<FormState>();
+  final _reason = TextEditingController();
+  late final Map<int, TextEditingController> _quantities = {
+    for (final item in widget.invoice['items'] as List)
+      item['product_id'] as int: TextEditingController(),
+  };
+
+  Map<int, int> get _returnedByProduct {
+    final out = <int, int>{};
+    for (final ret in (widget.invoice['returns'] as List? ?? const [])) {
+      for (final item in (ret['items'] as List? ?? const [])) {
+        final productId = item['product_id'] as int;
+        out[productId] =
+            (out[productId] ?? 0) + ((item['package_count'] as num).toInt());
+      }
+    }
+    return out;
+  }
+
+  @override
+  void dispose() {
+    _reason.dispose();
+    for (final controller in _quantities.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  int _remainingPackages(Map<String, dynamic> item) {
+    final productId = item['product_id'] as int;
+    final sold = ((item['package_count'] ?? item['quantity']) as num).toInt();
+    return sold - (_returnedByProduct[productId] ?? 0);
+  }
+
+  void _submit() {
+    if (!_form.currentState!.validate()) return;
+    final items = <Map<String, dynamic>>[];
+    for (final item in widget.invoice['items'] as List) {
+      final productId = item['product_id'] as int;
+      final text = _quantities[productId]!.text.trim();
+      if (text.isEmpty) continue;
+      final count = int.tryParse(text) ?? 0;
+      if (count > 0) {
+        items.add({'product_id': productId, 'package_count': count});
+      }
+    }
+    if (items.isEmpty) return;
+    Navigator.pop(context, {'reason': _reason.text.trim(), 'items': items});
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('تسجيل مرتجع'),
+    content: Form(
+      key: _form,
+      child: SizedBox(
+        width: 560,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final item in widget.invoice['items'] as List) ...[
+                Builder(
+                  builder: (context) {
+                    final productId = item['product_id'] as int;
+                    final remaining = _remainingPackages(item);
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text('${item['title']}'),
+                            subtitle: Text('المتاح للمرتجع: $remaining'),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 120,
+                          child: TextFormField(
+                            controller: _quantities[productId],
+                            enabled: remaining > 0,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'العدد',
+                            ),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return null;
+                              }
+                              final n = int.tryParse(value.trim());
+                              if (n == null || n < 0 || n > remaining) {
+                                return 'غير صحيح';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                const Divider(height: 8),
+              ],
+              TextFormField(
+                controller: _reason,
+                maxLength: 500,
+                decoration: const InputDecoration(
+                  labelText: 'سبب المرتجع (اختياري)',
+                  counterText: '',
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('إلغاء'),
+      ),
+      FilledButton(onPressed: _submit, child: const Text('تسجيل')),
+    ],
+  );
 }
 
 class _PaymentDialogState extends State<PaymentDialog> {
