@@ -37,7 +37,7 @@ class _CommerceScreenState extends State<CommerceScreen> {
   @override
   void initState() {
     super.initState();
-    widget.cubit.loadIfNeeded();
+    widget.cubit.refresh();
   }
 
   @override

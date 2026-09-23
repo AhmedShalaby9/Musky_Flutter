@@ -7,7 +7,6 @@ class JournalState {
     this.loading = false,
     this.error,
     this.data = const {},
-    this.initialized = false,
     this.expired = false,
   });
 
@@ -15,7 +14,6 @@ class JournalState {
   final bool loading;
   final String? error;
   final Map<String, dynamic> data;
-  final bool initialized;
   final bool expired;
 
   JournalState copyWith({
@@ -24,14 +22,12 @@ class JournalState {
     bool clearError = false,
     String? error,
     Map<String, dynamic>? data,
-    bool? initialized,
     bool? expired,
   }) => JournalState(
     date: date ?? this.date,
     loading: loading ?? this.loading,
     error: clearError ? null : (error ?? this.error),
     data: data ?? this.data,
-    initialized: initialized ?? this.initialized,
     expired: expired ?? this.expired,
   );
 }
@@ -46,10 +42,6 @@ class JournalCubit extends Cubit<JournalState> {
 
   String _fmt(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-
-  void loadIfNeeded() {
-    if (!state.initialized && !state.loading) _fetch(state.date);
-  }
 
   void refresh() => _fetch(state.date);
 
@@ -94,7 +86,7 @@ class JournalCubit extends Cubit<JournalState> {
         cancellation: cancel,
       );
       if (!isClosed) {
-        emit(state.copyWith(loading: false, data: result, initialized: true));
+        emit(state.copyWith(loading: false, data: result));
       }
     } on ApiException catch (e) {
       if (!isClosed) {

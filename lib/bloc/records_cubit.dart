@@ -9,7 +9,7 @@ class RecordsState {
     this.offset = 0,
     this.searchQuery = '',
     this.daysFilter,
-    this.initialized = false,
+    this.balanceFilter,
     this.expired = false,
   });
 
@@ -19,7 +19,7 @@ class RecordsState {
   final int offset;
   final String searchQuery;
   final int? daysFilter;
-  final bool initialized;
+  final String? balanceFilter;
   final bool expired;
 
   static const _keep = Object();
@@ -32,7 +32,7 @@ class RecordsState {
     int? offset,
     String? searchQuery,
     Object? daysFilter = _keep,
-    bool? initialized,
+    Object? balanceFilter = _keep,
     bool? expired,
   }) => RecordsState(
     loading: loading ?? this.loading,
@@ -43,7 +43,9 @@ class RecordsState {
     daysFilter: identical(daysFilter, _keep)
         ? this.daysFilter
         : daysFilter as int?,
-    initialized: initialized ?? this.initialized,
+    balanceFilter: identical(balanceFilter, _keep)
+        ? this.balanceFilter
+        : balanceFilter as String?,
     expired: expired ?? this.expired,
   );
 }
@@ -58,36 +60,46 @@ class RecordsCubit extends Cubit<RecordsState> {
   int _requestId = 0;
   ApiRequestCancellation? _active;
 
-  bool get _isClients => _section == 'العملاء' || _section == 'الموردين';
+  bool get _isClients => _section == 'العملاء';
   bool get _isBusinesses => _section == 'الأعمال';
-  String? get _balanceFilter => _section == 'الموردين' ? 'payable' : null;
 
   String get _path => _isBusinesses
       ? 'tenants'
       : 'tenants/$_tenantId/${_isClients ? 'clients' : 'users'}';
 
-  void loadIfNeeded() {
-    if (!state.initialized && !state.loading) {
-      _fetch(offset: 0, q: '', daysFilter: null);
-    }
-  }
-
   void refresh() => _fetch(
     offset: state.offset,
     q: state.searchQuery,
     daysFilter: state.daysFilter,
+    balanceFilter: state.balanceFilter,
   );
 
-  void search(String q) =>
-      _fetch(offset: 0, q: q, daysFilter: state.daysFilter);
+  void search(String q) => _fetch(
+    offset: 0,
+    q: q,
+    daysFilter: state.daysFilter,
+    balanceFilter: state.balanceFilter,
+  );
 
-  void filterDays(int? days) =>
-      _fetch(offset: 0, q: state.searchQuery, daysFilter: days);
+  void filterDays(int? days) => _fetch(
+    offset: 0,
+    q: state.searchQuery,
+    daysFilter: days,
+    balanceFilter: state.balanceFilter,
+  );
+
+  void filterBalance(String? balance) => _fetch(
+    offset: 0,
+    q: state.searchQuery,
+    daysFilter: state.daysFilter,
+    balanceFilter: balance,
+  );
 
   void nextPage() => _fetch(
     offset: state.offset + 50,
     q: state.searchQuery,
     daysFilter: state.daysFilter,
+    balanceFilter: state.balanceFilter,
   );
 
   void prevPage() {
@@ -96,6 +108,7 @@ class RecordsCubit extends Cubit<RecordsState> {
       offset: state.offset - 50,
       q: state.searchQuery,
       daysFilter: state.daysFilter,
+      balanceFilter: state.balanceFilter,
     );
   }
 
@@ -103,6 +116,7 @@ class RecordsCubit extends Cubit<RecordsState> {
     required int offset,
     required String q,
     required int? daysFilter,
+    required String? balanceFilter,
   }) async {
     _active?.cancel();
     final cancel = ApiRequestCancellation();
@@ -116,7 +130,7 @@ class RecordsCubit extends Cubit<RecordsState> {
         offset: offset,
         q: _isClients ? q : '',
         daysWithoutPayment: _isClients ? daysFilter : null,
-        balance: _isClients ? _balanceFilter : null,
+        balance: _isClients ? balanceFilter : null,
         cancellation: cancel,
       );
       if (_requestId == id && !isClosed) {
@@ -127,7 +141,7 @@ class RecordsCubit extends Cubit<RecordsState> {
             offset: offset,
             searchQuery: q,
             daysFilter: daysFilter,
-            initialized: true,
+            balanceFilter: balanceFilter,
           ),
         );
       }

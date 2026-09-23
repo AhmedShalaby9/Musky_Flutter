@@ -36,15 +36,14 @@ class _RecordsScreenState extends State<RecordsScreen> {
   final _search = TextEditingController();
   final _horizontal = ScrollController();
   Timer? _searchTimer;
-  bool get _clients => widget.section == 'العملاء' || _suppliers;
-  bool get _suppliers => widget.section == 'الموردين';
+  bool get _clients => widget.section == 'العملاء';
   bool get _businesses => widget.section == 'الأعمال';
   bool get _team => widget.section == 'الفريق';
 
   @override
   void initState() {
     super.initState();
-    widget.cubit.loadIfNeeded();
+    widget.cubit.refresh();
   }
 
   @override
@@ -296,9 +295,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
                       const SizedBox(height: 8),
                       Text(
                         _clients
-                            ? _suppliers
-                                  ? 'الأشخاص الذين تشتري منهم وعليك رصيد لهم.'
-                                  : 'الأشخاص الذين تتعامل معهم.'
+                            ? 'الأشخاص الذين تتعامل معهم.'
                             : _businesses
                             ? 'مساحة عمل مخصصة لكل تاجر.'
                             : 'الأشخاص الذين يصلون إلى مساحة العمل.',
@@ -307,7 +304,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
                     ],
                   ),
                 ),
-                if (_clients && !_suppliers)
+                if (_clients)
                   FilledButton.icon(
                     onPressed: loading ? null : () => _edit(),
                     icon: const Icon(Icons.add, size: 19),
@@ -357,6 +354,11 @@ class _RecordsScreenState extends State<RecordsScreen> {
                   _DaysFilterButton(
                     value: state.daysFilter,
                     onChanged: (v) => widget.cubit.filterDays(v),
+                  ),
+                  const SizedBox(width: 8),
+                  _BalanceFilterButton(
+                    value: state.balanceFilter,
+                    onChanged: (v) => widget.cubit.filterBalance(v),
                   ),
                 ],
                 const SizedBox(width: 12),
@@ -424,8 +426,6 @@ class _RecordsScreenState extends State<RecordsScreen> {
                               Text(
                                 _search.text.trim().isNotEmpty
                                     ? 'جرّب بحثاً آخر أو امسح حقل البحث.'
-                                    : _suppliers
-                                    ? 'لا يوجد موردون عليك رصيد لهم حالياً.'
                                     : _clients
                                     ? 'أضف أول عميل لتنظيم جهات الاتصال.'
                                     : 'حدّث الصفحة بعد إنشاء السجلات.',
@@ -1328,6 +1328,85 @@ class _DaysFilterButton extends StatelessWidget {
             const SizedBox(width: 6),
             Text(
               active ? 'لم يدفع $value أيام+' : 'آخر دفعة',
+              style: TextStyle(fontSize: 13, color: active ? teal : muted),
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.arrow_drop_down, size: 18, color: active ? teal : muted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BalanceFilterButton extends StatelessWidget {
+  const _BalanceFilterButton({required this.value, required this.onChanged});
+  final String? value;
+  final ValueChanged<String?> onChanged;
+
+  static const _all = '__all__';
+
+  @override
+  Widget build(BuildContext context) {
+    final active = value != null && value!.isNotEmpty;
+    final label = switch (value) {
+      'receivable' => 'مدينون لي',
+      'payable' => 'أنا مدين لهم',
+      _ => 'الرصيد',
+    };
+    return PopupMenuButton<String>(
+      tooltip: 'تصفية حسب الرصيد',
+      onSelected: (v) => onChanged(v == _all ? null : v),
+      itemBuilder: (_) => [
+        PopupMenuItem<String>(
+          value: _all,
+          child: Text(
+            'كل الأرصدة',
+            style: TextStyle(
+              color: active ? null : teal,
+              fontWeight: active ? null : FontWeight.w600,
+            ),
+          ),
+        ),
+        PopupMenuItem<String>(
+          value: 'receivable',
+          child: Text(
+            'مدينون لي',
+            style: TextStyle(
+              color: value == 'receivable' ? teal : null,
+              fontWeight: value == 'receivable' ? FontWeight.w600 : null,
+            ),
+          ),
+        ),
+        PopupMenuItem<String>(
+          value: 'payable',
+          child: Text(
+            'أنا مدين لهم',
+            style: TextStyle(
+              color: value == 'payable' ? teal : null,
+              fontWeight: value == 'payable' ? FontWeight.w600 : null,
+            ),
+          ),
+        ),
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          border: Border.all(color: active ? teal : line),
+          borderRadius: BorderRadius.circular(8),
+          color: active ? teal.withValues(alpha: .08) : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.account_balance_wallet_outlined,
+              size: 16,
+              color: active ? teal : muted,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
               style: TextStyle(fontSize: 13, color: active ? teal : muted),
             ),
             const SizedBox(width: 4),

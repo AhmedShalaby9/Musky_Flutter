@@ -6,7 +6,6 @@ class OverviewState {
     this.loading = false,
     this.error,
     this.summary,
-    this.initialized = false,
     this.expired = false,
     this.overdueLoading = false,
     this.overdueError,
@@ -17,7 +16,6 @@ class OverviewState {
   final bool loading;
   final String? error;
   final Map<String, dynamic>? summary;
-  final bool initialized;
   final bool expired;
 
   final bool overdueLoading;
@@ -30,25 +28,24 @@ class OverviewState {
     bool clearError = false,
     String? error,
     Map<String, dynamic>? summary,
-    bool? initialized,
     bool? expired,
     bool? overdueLoading,
     bool clearOverdueError = false,
     String? overdueError,
     List<Map<String, dynamic>>? overdueClients,
     int? overdueDays,
-  }) =>
-      OverviewState(
-        loading: loading ?? this.loading,
-        error: clearError ? null : (error ?? this.error),
-        summary: summary ?? this.summary,
-        initialized: initialized ?? this.initialized,
-        expired: expired ?? this.expired,
-        overdueLoading: overdueLoading ?? this.overdueLoading,
-        overdueError: clearOverdueError ? null : (overdueError ?? this.overdueError),
-        overdueClients: overdueClients ?? this.overdueClients,
-        overdueDays: overdueDays ?? this.overdueDays,
-      );
+  }) => OverviewState(
+    loading: loading ?? this.loading,
+    error: clearError ? null : (error ?? this.error),
+    summary: summary ?? this.summary,
+    expired: expired ?? this.expired,
+    overdueLoading: overdueLoading ?? this.overdueLoading,
+    overdueError: clearOverdueError
+        ? null
+        : (overdueError ?? this.overdueError),
+    overdueClients: overdueClients ?? this.overdueClients,
+    overdueDays: overdueDays ?? this.overdueDays,
+  );
 }
 
 class OverviewCubit extends Cubit<OverviewState> {
@@ -58,13 +55,6 @@ class OverviewCubit extends Cubit<OverviewState> {
   final int _tenantId;
   ApiRequestCancellation? _active;
   ApiRequestCancellation? _overdueActive;
-
-  void loadIfNeeded() {
-    if (!state.initialized && !state.loading) {
-      _fetch();
-      _fetchOverdue(state.overdueDays);
-    }
-  }
 
   void refresh() {
     _fetch();
@@ -86,7 +76,7 @@ class OverviewCubit extends Cubit<OverviewState> {
         cancellation: cancel,
       );
       if (!isClosed) {
-        emit(state.copyWith(loading: false, summary: summary, initialized: true));
+        emit(state.copyWith(loading: false, summary: summary));
       }
     } on ApiException catch (e) {
       if (!isClosed) {
@@ -100,7 +90,12 @@ class OverviewCubit extends Cubit<OverviewState> {
       // cancelled — ignore
     } catch (_) {
       if (!isClosed) {
-        emit(state.copyWith(loading: false, error: 'تعذّر تحميل الأرصدة. حاول مجدداً.'));
+        emit(
+          state.copyWith(
+            loading: false,
+            error: 'تعذّر تحميل الأرصدة. حاول مجدداً.',
+          ),
+        );
       }
     }
   }
@@ -110,7 +105,13 @@ class OverviewCubit extends Cubit<OverviewState> {
     final cancel = ApiRequestCancellation();
     _overdueActive = cancel;
 
-    emit(state.copyWith(overdueLoading: true, clearOverdueError: true, overdueDays: days));
+    emit(
+      state.copyWith(
+        overdueLoading: true,
+        clearOverdueError: true,
+        overdueDays: days,
+      ),
+    );
     try {
       final rows = await _api.list(
         'tenants/$_tenantId/clients',
@@ -133,7 +134,12 @@ class OverviewCubit extends Cubit<OverviewState> {
       // cancelled — ignore
     } catch (_) {
       if (!isClosed) {
-        emit(state.copyWith(overdueLoading: false, overdueError: 'تعذّر تحميل العملاء.'));
+        emit(
+          state.copyWith(
+            overdueLoading: false,
+            overdueError: 'تعذّر تحميل العملاء.',
+          ),
+        );
       }
     }
   }

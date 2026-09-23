@@ -11,7 +11,6 @@ class CommerceState {
     this.searchQuery = '',
     this.statusFilter = '',
     this.documentTypeFilter = '',
-    this.initialized = false,
     this.expired = false,
   });
 
@@ -25,7 +24,6 @@ class CommerceState {
   // Nullable while hot reload transitions an existing state instance created
   // before this filter was introduced. New states always initialize it to ''.
   final String? documentTypeFilter;
-  final bool initialized;
   final bool expired;
 
   CommerceState copyWith({
@@ -37,7 +35,6 @@ class CommerceState {
     String? searchQuery,
     String? statusFilter,
     String? documentTypeFilter,
-    bool? initialized,
     bool? expired,
   }) => CommerceState(
     products: products,
@@ -48,7 +45,6 @@ class CommerceState {
     searchQuery: searchQuery ?? this.searchQuery,
     statusFilter: statusFilter ?? this.statusFilter,
     documentTypeFilter: documentTypeFilter ?? this.documentTypeFilter ?? '',
-    initialized: initialized ?? this.initialized,
     expired: expired ?? this.expired,
   );
 }
@@ -64,12 +60,6 @@ class CommerceCubit extends Cubit<CommerceState> {
 
   String get _base =>
       'tenants/$_tenantId/${state.products ? 'products' : 'invoices'}';
-
-  void loadIfNeeded() {
-    if (!state.initialized && !state.loading) {
-      _fetch(offset: 0, q: '', status: '', documentType: '');
-    }
-  }
 
   void refresh() => _fetch(
     offset: state.offset,
@@ -153,7 +143,6 @@ class CommerceCubit extends Cubit<CommerceState> {
             searchQuery: q,
             statusFilter: status,
             documentTypeFilter: documentType,
-            initialized: true,
           ),
         );
       }

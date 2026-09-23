@@ -1,16 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../bloc/journal_cubit.dart';
+import '../core/api.dart';
 import '../core/money.dart';
 import '../core/theme.dart';
+import 'client_detail.dart';
 
 class DailyJournalScreen extends StatefulWidget {
   const DailyJournalScreen({
     super.key,
     required this.cubit,
+    required this.api,
+    required this.tenantId,
     required this.onExpired,
   });
   final JournalCubit cubit;
+  final MuskyApi api;
+  final int tenantId;
   final VoidCallback onExpired;
   @override
   State<DailyJournalScreen> createState() => _DailyJournalScreenState();
@@ -73,6 +79,29 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
       clientId: (row['client_id'] as num).toInt(),
       receiptId: (row['id'] as num).toInt(),
     );
+  }
+
+  Future<void> _editReceipt(Map<String, dynamic> row) async {
+    final direction = row['direction'] == 'out' ? 'out' : 'in';
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (_) => ReceiptDialog(
+        api: widget.api,
+        tenantId: widget.tenantId,
+        clientId: (row['client_id'] as num).toInt(),
+        balanceMinor: 0,
+        onExpired: widget.onExpired,
+        direction: direction,
+        receipt: {
+          ...row,
+          'kind': direction == 'out' ? 'client_payment' : 'receipt',
+          'ref_id': row['id'],
+        },
+      ),
+    );
+    if (saved == true && mounted) {
+      widget.cubit.refresh();
+    }
   }
 
   Widget _journalField(
@@ -153,6 +182,11 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
                 color: receipt ? Colors.red : line,
               ),
             );
+            final editButton = IconButton(
+              tooltip: 'تعديل الدفعة',
+              onPressed: receipt ? () => _editReceipt(p) : null,
+              icon: Icon(Icons.edit_outlined, color: receipt ? muted : line),
+            );
             if (size.maxWidth < 760) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -172,11 +206,23 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
                   ),
                   if (receipt) ...[
                     const SizedBox(height: 8),
-                    TextButton.icon(
-                      onPressed: () => _deleteReceipt(p),
-                      icon: const Icon(Icons.delete_outline, size: 18),
-                      label: const Text('حذف نهائي'),
-                      style: TextButton.styleFrom(foregroundColor: Colors.red),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        TextButton.icon(
+                          onPressed: () => _editReceipt(p),
+                          icon: const Icon(Icons.edit_outlined, size: 18),
+                          label: const Text('تعديل'),
+                        ),
+                        TextButton.icon(
+                          onPressed: () => _deleteReceipt(p),
+                          icon: const Icon(Icons.delete_outline, size: 18),
+                          label: const Text('حذف نهائي'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.red,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ],
@@ -185,6 +231,7 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
             return Row(
               children: [
                 ...fields.map((field) => Expanded(child: field)),
+                editButton,
                 deleteButton,
               ],
             );

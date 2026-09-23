@@ -32,7 +32,7 @@ class _FinancialOverviewState extends State<FinancialOverview> {
   @override
   void initState() {
     super.initState();
-    widget.cubit.loadIfNeeded();
+    widget.cubit.refresh();
   }
 
   Widget _quickAction(
@@ -244,10 +244,14 @@ class _FinancialOverviewState extends State<FinancialOverview> {
               ),
               child: Column(
                 children: [
-                  for (final raw in (state.summary!['clients'] as List)
-                      .whereType<Map>()
-                      .where((client) => ((client['balance_minor'] as num?) ?? 0) != 0)
-                      .take(10))
+                  for (final raw
+                      in (state.summary!['clients'] as List)
+                          .whereType<Map>()
+                          .where(
+                            (client) =>
+                                ((client['balance_minor'] as num?) ?? 0) != 0,
+                          )
+                          .take(10))
                     ListTile(
                       dense: true,
                       title: Text('${raw['name'] ?? ''}'),
@@ -258,7 +262,9 @@ class _FinancialOverviewState extends State<FinancialOverview> {
                         style: const TextStyle(color: muted),
                       ),
                       trailing: Text(
-                        egp(((raw['balance_minor'] as num?) ?? 0).abs().toInt()),
+                        egp(
+                          ((raw['balance_minor'] as num?) ?? 0).abs().toInt(),
+                        ),
                         style: TextStyle(
                           color: (raw['balance_minor'] as num? ?? 0) >= 0
                               ? teal

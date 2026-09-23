@@ -132,7 +132,6 @@ abstract class MuskyApi {
     DateTime to,
   );
   Future<Uint8List> downloadBytes(String url);
-  void clearCache();
   void clearSession();
   void dispose();
 }
@@ -655,10 +654,6 @@ class HttpMuskyApi implements MuskyApi {
       client.close(force: true);
     }
   }
-
-  @override
-  @override
-  void clearCache() {}
 
   @override
   void clearSession() {

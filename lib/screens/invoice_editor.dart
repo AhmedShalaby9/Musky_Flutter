@@ -522,6 +522,8 @@ class _QuickClientDialogState extends State<QuickClientDialog> {
     'name': _name.text.trim(),
     'phone': _phone.text.trim().isEmpty ? null : _phone.text.trim(),
     'address': _address.text.trim(),
+    'opening_balance_minor': 0,
+    'opening_balance_type': 'receivable',
     if (userId != null) 'user_id': userId,
   };
 

@@ -239,9 +239,6 @@ class FakeApi implements MuskyApi {
   }
 
   @override
-  void clearCache() {}
-
-  @override
   void dispose() {}
   @override
   Future<void> changePassword(String current, String next) async {}
