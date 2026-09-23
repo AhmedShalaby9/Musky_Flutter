@@ -11,6 +11,8 @@ class CommerceState {
     this.searchQuery = '',
     this.statusFilter = '',
     this.documentTypeFilter = '',
+    this.fromDate = '',
+    this.toDate = '',
     this.expired = false,
   });
 
@@ -24,6 +26,8 @@ class CommerceState {
   // Nullable while hot reload transitions an existing state instance created
   // before this filter was introduced. New states always initialize it to ''.
   final String? documentTypeFilter;
+  final String fromDate;
+  final String toDate;
   final bool expired;
 
   CommerceState copyWith({
@@ -35,6 +39,8 @@ class CommerceState {
     String? searchQuery,
     String? statusFilter,
     String? documentTypeFilter,
+    String? fromDate,
+    String? toDate,
     bool? expired,
   }) => CommerceState(
     products: products,
@@ -45,6 +51,8 @@ class CommerceState {
     searchQuery: searchQuery ?? this.searchQuery,
     statusFilter: statusFilter ?? this.statusFilter,
     documentTypeFilter: documentTypeFilter ?? this.documentTypeFilter ?? '',
+    fromDate: fromDate ?? this.fromDate,
+    toDate: toDate ?? this.toDate,
     expired: expired ?? this.expired,
   );
 }
@@ -66,6 +74,8 @@ class CommerceCubit extends Cubit<CommerceState> {
     q: state.searchQuery,
     status: state.statusFilter,
     documentType: state.documentTypeFilter ?? '',
+    from: state.fromDate,
+    to: state.toDate,
   );
 
   void search(String q) => _fetch(
@@ -73,6 +83,8 @@ class CommerceCubit extends Cubit<CommerceState> {
     q: q,
     status: state.statusFilter,
     documentType: state.documentTypeFilter ?? '',
+    from: state.fromDate,
+    to: state.toDate,
   );
 
   void filterStatus(String status) => _fetch(
@@ -80,6 +92,8 @@ class CommerceCubit extends Cubit<CommerceState> {
     q: state.searchQuery,
     status: status,
     documentType: state.documentTypeFilter ?? '',
+    from: state.fromDate,
+    to: state.toDate,
   );
 
   void filterDocumentType(String documentType) => _fetch(
@@ -87,6 +101,17 @@ class CommerceCubit extends Cubit<CommerceState> {
     q: state.searchQuery,
     status: state.statusFilter,
     documentType: documentType,
+    from: state.fromDate,
+    to: state.toDate,
+  );
+
+  void filterDates({required String from, required String to}) => _fetch(
+    offset: 0,
+    q: state.searchQuery,
+    status: state.statusFilter,
+    documentType: state.documentTypeFilter ?? '',
+    from: from,
+    to: to,
   );
 
   void nextPage() => _fetch(
@@ -94,6 +119,8 @@ class CommerceCubit extends Cubit<CommerceState> {
     q: state.searchQuery,
     status: state.statusFilter,
     documentType: state.documentTypeFilter ?? '',
+    from: state.fromDate,
+    to: state.toDate,
   );
 
   void prevPage() {
@@ -103,6 +130,8 @@ class CommerceCubit extends Cubit<CommerceState> {
       q: state.searchQuery,
       status: state.statusFilter,
       documentType: state.documentTypeFilter ?? '',
+      from: state.fromDate,
+      to: state.toDate,
     );
   }
 
@@ -111,6 +140,8 @@ class CommerceCubit extends Cubit<CommerceState> {
     required String q,
     required String status,
     required String documentType,
+    required String from,
+    required String to,
   }) async {
     _active?.cancel();
     final cancel = ApiRequestCancellation();
@@ -123,10 +154,12 @@ class CommerceCubit extends Cubit<CommerceState> {
         queryParameters: {
           'limit': '50',
           'offset': '$offset',
-          if (state.products && q.isNotEmpty) 'q': q,
+          if (q.isNotEmpty) 'q': q,
           if (!state.products && status.isNotEmpty) 'status': status,
           if (!state.products && documentType.isNotEmpty)
             'document_type': documentType,
+          if (!state.products && from.isNotEmpty) 'from': from,
+          if (!state.products && to.isNotEmpty) 'to': to,
         },
       ).query;
       final response = await _api.requestWithCancellation(
@@ -143,6 +176,8 @@ class CommerceCubit extends Cubit<CommerceState> {
             searchQuery: q,
             statusFilter: status,
             documentTypeFilter: documentType,
+            fromDate: from,
+            toDate: to,
           ),
         );
       }

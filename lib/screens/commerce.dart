@@ -174,6 +174,33 @@ class _CommerceScreenState extends State<CommerceScreen> {
     if (mounted) widget.cubit.refresh();
   }
 
+  String _dateLabel(String value, String fallback) {
+    if (value.isEmpty) return fallback;
+    final date = DateTime.tryParse(value);
+    if (date == null) return fallback;
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _pickInvoiceDate({
+    required bool from,
+    required CommerceState state,
+  }) async {
+    final current = DateTime.tryParse(from ? state.fromDate : state.toDate);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: current ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked == null || !mounted) return;
+    final value =
+        '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+    widget.cubit.filterDates(
+      from: from ? value : state.fromDate,
+      to: from ? state.toDate : value,
+    );
+  }
+
   Widget _invoiceField(String label, String value, {bool emphasis = false}) =>
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -516,63 +543,133 @@ class _CommerceScreenState extends State<CommerceScreen> {
                           );
                         },
                       )
-                    : Row(
+                    : Column(
                         children: [
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              value: state.documentTypeFilter ?? '',
-                              decoration: const InputDecoration(
-                                labelText: 'نوع الفاتورة',
-                              ),
-                              items: const [
-                                DropdownMenuItem(
-                                  value: '',
-                                  child: Text('بيع وشراء'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'sale',
-                                  child: Text('بيع فقط'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'purchase',
-                                  child: Text('شراء فقط'),
-                                ),
-                              ],
-                              onChanged: busy
-                                  ? null
-                                  : (value) =>
-                                        widget.cubit.filterDocumentType(value!),
+                          TextField(
+                            controller: _search,
+                            decoration: const InputDecoration(
+                              hintText: 'بحث باسم العميل',
+                              prefixIcon: Icon(Icons.search),
                             ),
+                            onChanged: (_) {
+                              _debounce?.cancel();
+                              _debounce = Timer(
+                                const Duration(milliseconds: 300),
+                                () => widget.cubit.search(_search.text.trim()),
+                              );
+                            },
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              value: state.statusFilter,
-                              decoration: const InputDecoration(
-                                labelText: 'حالة الفاتورة',
-                              ),
-                              items: [
-                                for (final status in [
-                                  '',
-                                  'draft',
-                                  'posted',
-                                  'void',
-                                  'cancelled',
-                                ])
-                                  DropdownMenuItem(
-                                    value: status,
-                                    child: Text(
-                                      status.isEmpty
-                                          ? 'كل الحالات'
-                                          : invoiceStatusLabel(status),
-                                    ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: DropdownButtonFormField<String>(
+                                  initialValue: state.documentTypeFilter ?? '',
+                                  decoration: const InputDecoration(
+                                    labelText: 'نوع الفاتورة',
                                   ),
-                              ],
-                              onChanged: busy
-                                  ? null
-                                  : (value) =>
-                                        widget.cubit.filterStatus(value!),
-                            ),
+                                  items: const [
+                                    DropdownMenuItem(
+                                      value: '',
+                                      child: Text('بيع وشراء'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'sale',
+                                      child: Text('بيع فقط'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'purchase',
+                                      child: Text('شراء فقط'),
+                                    ),
+                                  ],
+                                  onChanged: busy
+                                      ? null
+                                      : (value) => widget.cubit
+                                            .filterDocumentType(value!),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: DropdownButtonFormField<String>(
+                                  initialValue: state.statusFilter,
+                                  decoration: const InputDecoration(
+                                    labelText: 'حالة الفاتورة',
+                                  ),
+                                  items: [
+                                    for (final status in [
+                                      '',
+                                      'draft',
+                                      'posted',
+                                      'void',
+                                      'cancelled',
+                                    ])
+                                      DropdownMenuItem(
+                                        value: status,
+                                        child: Text(
+                                          status.isEmpty
+                                              ? 'كل الحالات'
+                                              : invoiceStatusLabel(status),
+                                        ),
+                                      ),
+                                  ],
+                                  onChanged: busy
+                                      ? null
+                                      : (value) =>
+                                            widget.cubit.filterStatus(value!),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              OutlinedButton.icon(
+                                onPressed: busy
+                                    ? null
+                                    : () => _pickInvoiceDate(
+                                        from: true,
+                                        state: state,
+                                      ),
+                                icon: const Icon(
+                                  Icons.calendar_today,
+                                  size: 18,
+                                ),
+                                label: Text(
+                                  _dateLabel(state.fromDate, 'من تاريخ'),
+                                ),
+                              ),
+                              if (state.fromDate.isNotEmpty)
+                                IconButton(
+                                  tooltip: 'مسح تاريخ البداية',
+                                  onPressed: busy
+                                      ? null
+                                      : () => widget.cubit.filterDates(
+                                          from: '',
+                                          to: state.toDate,
+                                        ),
+                                  icon: const Icon(Icons.close),
+                                ),
+                              const SizedBox(width: 8),
+                              OutlinedButton.icon(
+                                onPressed: busy
+                                    ? null
+                                    : () => _pickInvoiceDate(
+                                        from: false,
+                                        state: state,
+                                      ),
+                                icon: const Icon(Icons.event, size: 18),
+                                label: Text(
+                                  _dateLabel(state.toDate, 'إلى تاريخ'),
+                                ),
+                              ),
+                              if (state.toDate.isNotEmpty)
+                                IconButton(
+                                  tooltip: 'مسح تاريخ النهاية',
+                                  onPressed: busy
+                                      ? null
+                                      : () => widget.cubit.filterDates(
+                                          from: state.fromDate,
+                                          to: '',
+                                        ),
+                                  icon: const Icon(Icons.close),
+                                ),
+                            ],
                           ),
                         ],
                       ),
