@@ -711,6 +711,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
   bool _busy = false;
   String get _type =>
       widget.invoice?['document_type'] as String? ?? widget.documentType;
+  bool get _posted => widget.invoice?['status'] == 'posted';
   @override
   void initState() {
     super.initState();
@@ -870,7 +871,11 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
       }
     } catch (_) {
       if (mounted) {
-        setState(() => _error = 'تعذّر حفظ المسودة. حاول مجدداً.');
+        setState(
+          () => _error = _posted
+              ? 'تعذّر حفظ الفاتورة. حاول مجدداً.'
+              : 'تعذّر حفظ المسودة. حاول مجدداً.',
+        );
       }
     } finally {
       if (mounted) {
@@ -907,6 +912,8 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                   ? (_type == 'purchase'
                         ? 'فاتورة شراء جديدة'
                         : 'فاتورة بيع جديدة')
+                  : _posted
+                  ? 'تعديل ${invoiceLabel(widget.invoice!)}'
                   : 'تعديل مسودة ${invoiceTypeLabel(_type)}',
             ),
           ),
@@ -931,7 +938,9 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    _type == 'purchase'
+                    _posted
+                        ? 'هذه فاتورة صادرة. عند الحفظ سيتم تعديل المخزون ورصيد العميل بفرق التعديل فقط.'
+                        : _type == 'purchase'
                         ? 'أضف المنتجات التي تم شراؤها. عند إصدار الفاتورة ستزداد الكمية في المخزون.'
                         : 'أضف المنتجات المراد بيعها. عند إصدار الفاتورة ستُخصم الكمية من المخزون.',
                     style: const TextStyle(color: ink),
@@ -948,7 +957,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     OutlinedButton.icon(
-                      onPressed: _busy ? null : () => _pick(false),
+                      onPressed: _busy || _posted ? null : () => _pick(false),
                       icon: const Icon(Icons.person_outline),
                       label: Text(_clientName ?? 'اختر عميلاً'),
                     ),
@@ -1326,8 +1335,8 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
           content: Text(
             action == 'post'
                 ? (_invoice!['document_type'] == 'purchase'
-                      ? 'سيضيف هذا الحزم إلى المخزون ويسجل ${egp(_invoice!['total_minor'] as int)} مستحقة إلى ${_invoice!['client_name']}. لا يمكن تعديل الفاتورة بعد إصدارها.'
-                      : 'سيخصم هذا الحزم من المخزون ويسجل ${egp(_invoice!['total_minor'] as int)} مستحقة على ${_invoice!['client_name']}. لا يمكن تعديل الفاتورة بعد إصدارها.')
+                      ? 'سيضيف هذا الحزم إلى المخزون ويسجل ${egp(_invoice!['total_minor'] as int)} مستحقة إلى ${_invoice!['client_name']}.'
+                      : 'سيخصم هذا الحزم من المخزون ويسجل ${egp(_invoice!['total_minor'] as int)} مستحقة على ${_invoice!['client_name']}.')
                 : action == 'reactivate'
                 ? 'This restores the invoice to active status and applies its stock and balance calculations again.'
                 : 'This keeps the draft as cancelled. Stock and balances will not change.',
@@ -1799,6 +1808,12 @@ class _InvoiceDetailsState extends State<InvoiceDetails> {
             onPressed: _busy ? null : _deleteCancelled,
             icon: const Icon(Icons.delete_forever_outlined),
             label: const Text('حذف نهائي'),
+          ),
+        if (_invoice?['status'] == 'posted')
+          OutlinedButton.icon(
+            onPressed: _busy ? null : _edit,
+            icon: const Icon(Icons.edit_outlined),
+            label: const Text('تعديل الفاتورة'),
           ),
         if (_invoice?['status'] == 'posted')
           OutlinedButton(

@@ -251,6 +251,12 @@ class FakeApi implements MuskyApi {
     String notes,
   ) async => {};
   @override
+  Future<Map<String, dynamic>> createInvoiceReturn(
+    int tenantId,
+    int invoiceId,
+    Map<String, dynamic> data,
+  ) async => {};
+  @override
   Future<Map<String, dynamic>> createTenant(
     String name,
     String traderName,

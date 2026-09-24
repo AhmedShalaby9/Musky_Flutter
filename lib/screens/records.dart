@@ -188,12 +188,12 @@ class _RecordsScreenState extends State<RecordsScreen> {
           bytes[3] != 0x46) {
         throw const ApiException('الملف المستلم ليس PDF صحيحاً.');
       }
-      final name = '${client['name']}'.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
-      String fmt(DateTime d) =>
-          '${d.year}${d.month.toString().padLeft(2, '0')}${d.day.toString().padLeft(2, '0')}';
+      final name = '${client['name']}'.trim().replaceAll(
+        RegExp(r'[\\/:*?"<>|\s]+'),
+        '_',
+      );
       final location = await getSaveLocation(
-        suggestedName:
-            'كشف حساب $name ${fmt(period.from)}-${fmt(period.to)}.pdf',
+        suggestedName: 'كشف_حساب_$name.pdf',
         acceptedTypeGroups: [
           const XTypeGroup(label: 'PDF', extensions: ['pdf']),
         ],
