@@ -259,56 +259,43 @@ class _CommerceScreenState extends State<CommerceScreen> {
         ],
       );
 
-  Widget _invoiceSummary(String label, int amount, Color color) => Container(
-    width: 210,
-    padding: const EdgeInsets.all(18),
+  // A compact single-line chip (label + value side by side) rather than a
+  // tall stacked card, so the summary row leaves more height for the list.
+  Widget _summaryChip(
+    String label,
+    String value,
+    Color color, {
+    bool monospace = false,
+  }) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
     decoration: BoxDecoration(
       color: Colors.white,
       border: Border.all(color: line),
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(10),
     ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Text(label, style: const TextStyle(color: muted)),
-        const SizedBox(height: 8),
+        Text(label, style: const TextStyle(color: muted, fontSize: 12)),
+        const SizedBox(width: 10),
         Text(
-          egp(amount),
+          value,
           style: TextStyle(
             color: color,
-            fontSize: 20,
+            fontSize: 15,
             fontWeight: FontWeight.w700,
-            fontFamily: 'monospace',
+            fontFamily: monospace ? 'monospace' : null,
           ),
         ),
       ],
     ),
   );
 
-  Widget _productSummary(String label, int value, Color color) => Container(
-    width: 210,
-    padding: const EdgeInsets.all(18),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      border: Border.all(color: line),
-      borderRadius: BorderRadius.circular(12),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(color: muted)),
-        const SizedBox(height: 8),
-        Text(
-          '$value',
-          style: TextStyle(
-            color: color,
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
-    ),
-  );
+  Widget _invoiceSummary(String label, int amount, Color color) =>
+      _summaryChip(label, egp(amount), color, monospace: true);
+
+  Widget _productSummary(String label, int value, Color color) =>
+      _summaryChip(label, '$value', color);
 
   Widget _invoiceRows(List<Map<String, dynamic>> rows) => ListView.separated(
     itemCount: rows.length,
@@ -533,14 +520,19 @@ class _CommerceScreenState extends State<CommerceScreen> {
                   children: [
                     Text(
                       widget.products ? 'المنتجات' : 'الفواتير',
-                      style: Theme.of(context).textTheme.headlineMedium,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: ink,
+                        letterSpacing: -.4,
+                      ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 3),
                     Text(
                       widget.products
                           ? 'المخزون بالحزم. الأسعار تُحدَّد في كل فاتورة.'
                           : 'أنشئ فواتير البيع والشراء وسجّل حركة المخزون والحسابات.',
-                      style: const TextStyle(color: muted),
+                      style: const TextStyle(color: muted, fontSize: 12),
                     ),
                   ],
                 ),
@@ -564,7 +556,7 @@ class _CommerceScreenState extends State<CommerceScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
@@ -574,6 +566,10 @@ class _CommerceScreenState extends State<CommerceScreen> {
                         decoration: const InputDecoration(
                           hintText: 'بحث بالاسم أو الكود',
                           prefixIcon: Icon(Icons.search),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
                         ),
                         onChanged: (_) {
                           _debounce?.cancel();
@@ -590,6 +586,10 @@ class _CommerceScreenState extends State<CommerceScreen> {
                             decoration: const InputDecoration(
                               hintText: 'بحث باسم العميل',
                               prefixIcon: Icon(Icons.search),
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 10,
+                              ),
                             ),
                             onChanged: (_) {
                               _debounce?.cancel();
@@ -727,11 +727,11 @@ class _CommerceScreenState extends State<CommerceScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 10),
           if (!widget.products) ...[
             Wrap(
-              spacing: 14,
-              runSpacing: 14,
+              spacing: 10,
+              runSpacing: 10,
               children: [
                 _invoiceSummary(
                   'مبيعات هذه الصفحة',
@@ -763,12 +763,12 @@ class _CommerceScreenState extends State<CommerceScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 10),
           ],
           if (widget.products) ...[
             Wrap(
-              spacing: 14,
-              runSpacing: 14,
+              spacing: 10,
+              runSpacing: 10,
               children: [
                 _productSummary(
                   'إجمالي الحزم',
@@ -790,7 +790,7 @@ class _CommerceScreenState extends State<CommerceScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 10),
           ],
           Expanded(
             child: Container(
