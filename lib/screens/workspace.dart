@@ -371,6 +371,7 @@ class _WorkspaceState extends State<Workspace> {
                           tenantId: _tenantId!,
                           products: _section == 'المنتجات',
                           onExpired: _expired,
+                          user: widget.user,
                         ),
                         'دفتر اليومية' => DailyJournalScreen(
                           key: ValueKey('journal:$_tenantId'),

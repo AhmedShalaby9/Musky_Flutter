@@ -16,12 +16,14 @@ class CommerceScreen extends StatefulWidget {
     required this.tenantId,
     required this.products,
     required this.onExpired,
+    required this.user,
   });
   final CommerceCubit cubit;
   final MuskyApi api;
   final int tenantId;
   final bool products;
   final VoidCallback onExpired;
+  final AppUser user;
   @override
   State<CommerceScreen> createState() => _CommerceScreenState();
 }
@@ -639,7 +641,12 @@ class _CommerceScreenState extends State<CommerceScreen> {
                                       'draft',
                                       'posted',
                                       'void',
-                                      'cancelled',
+                                      // Cancelled drafts are never returned to
+                                      // a trader owner, so offering this
+                                      // filter to one would only ever show an
+                                      // empty list.
+                                      if (widget.user.role != 'trader')
+                                        'cancelled',
                                     ])
                                       DropdownMenuItem(
                                         value: status,

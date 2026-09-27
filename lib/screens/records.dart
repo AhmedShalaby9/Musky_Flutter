@@ -9,6 +9,7 @@ import '../core/api.dart';
 import '../core/money.dart';
 import '../core/theme.dart';
 import 'client_detail.dart';
+import 'user_contacts.dart';
 
 class RecordsScreen extends StatefulWidget {
   const RecordsScreen({
@@ -244,6 +245,22 @@ class _RecordsScreenState extends State<RecordsScreen> {
           context,
         ).showSnackBar(SnackBar(content: Text(e.message)));
     }
+  }
+
+  Future<void> _editContacts(Map<String, dynamic> user) async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => UserContactsDialog(
+        api: widget.api,
+        tenantId: widget.tenantId!,
+        userId: user['id'] as int,
+        userName: '${user['name']}',
+        canManage:
+            widget.user.isSuperAdmin || widget.user.id == user['id'],
+        canControlVisibility: widget.user.isSuperAdmin,
+        onExpired: widget.onExpired,
+      ),
+    );
   }
 
   Future<void> _changeTraderPassword(Map<String, dynamic> user) async {
@@ -739,13 +756,18 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                               ),
                                             if (_team)
                                               DataCell(
-                                                row['role'] == 'trader' &&
+                                                Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    if (row['role'] ==
+                                                            'trader' &&
                                                         (widget
                                                                 .user
                                                                 .isSuperAdmin ||
                                                             widget.user.role ==
-                                                                'admin')
-                                                    ? TextButton.icon(
+                                                                'admin'))
+                                                      TextButton.icon(
                                                         onPressed: () =>
                                                             _changeTraderPassword(
                                                               row,
@@ -758,8 +780,26 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                                         label: const Text(
                                                           'تغيير كلمة المرور',
                                                         ),
-                                                      )
-                                                    : const SizedBox.shrink(),
+                                                      ),
+                                                    if (widget
+                                                            .user
+                                                            .isSuperAdmin ||
+                                                        widget.user.id ==
+                                                            row['id'])
+                                                      TextButton.icon(
+                                                        onPressed: () =>
+                                                            _editContacts(row),
+                                                        icon: const Icon(
+                                                          Icons
+                                                              .contact_phone_outlined,
+                                                          size: 18,
+                                                        ),
+                                                        label: const Text(
+                                                          'جهات الاتصال',
+                                                        ),
+                                                      ),
+                                                  ],
+                                                ),
                                               ),
                                           ],
                                         ),
