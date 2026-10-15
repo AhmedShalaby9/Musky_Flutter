@@ -136,6 +136,7 @@ abstract class MuskyApi {
     DateTime from,
     DateTime to,
   );
+  Future<Uint8List> unpaidClientsXlsx(int tenantId, List<int> days);
   Future<Uint8List> downloadBytes(String url);
   void clearSession();
   void dispose();
@@ -584,6 +585,12 @@ class HttpMuskyApi implements MuskyApi {
       'tenants/$tenantId/clients/$clientId/statement.pdf?from=${fmt(from)}&to=${fmt(to)}',
     );
   }
+
+  @override
+  Future<Uint8List> unpaidClientsXlsx(int tenantId, List<int> days) =>
+      _downloadApiBytes(
+        'tenants/$tenantId/clients/unpaid.xlsx?periods=${days.join(',')}',
+      );
 
   Future<Uint8List> _downloadApiBytes(String path) async {
     final client = _httpClient;
