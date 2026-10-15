@@ -561,23 +561,42 @@ class _CommerceScreenState extends State<CommerceScreen> {
             children: [
               Expanded(
                 child: widget.products
-                    ? TextField(
-                        controller: _search,
-                        decoration: const InputDecoration(
-                          hintText: 'بحث بالاسم أو الكود',
-                          prefixIcon: Icon(Icons.search),
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 10,
+                    ? Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _search,
+                              decoration: const InputDecoration(
+                                hintText: 'بحث بالاسم أو الكود',
+                                prefixIcon: Icon(Icons.search),
+                                contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 10,
+                                ),
+                              ),
+                              onChanged: (_) {
+                                _debounce?.cancel();
+                                _debounce = Timer(
+                                  const Duration(milliseconds: 300),
+                                  () =>
+                                      widget.cubit.search(_search.text.trim()),
+                                );
+                              },
+                            ),
                           ),
-                        ),
-                        onChanged: (_) {
-                          _debounce?.cancel();
-                          _debounce = Timer(
-                            const Duration(milliseconds: 300),
-                            () => widget.cubit.search(_search.text.trim()),
-                          );
-                        },
+                          const SizedBox(width: 12),
+                          FilterChip(
+                            avatar: const Icon(
+                              Icons.inventory_2_outlined,
+                              size: 18,
+                            ),
+                            label: const Text('المتوفر في المخزون فقط'),
+                            selected: state.inStockOnly,
+                            onSelected: busy
+                                ? null
+                                : widget.cubit.filterInStock,
+                          ),
+                        ],
                       )
                     : Column(
                         children: [
