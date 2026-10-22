@@ -210,7 +210,7 @@ class _RecordPickerState extends State<RecordPicker> {
                       final title =
                           '${row[widget.products ? 'title' : 'name']}';
                       final secondary = widget.products
-                          ? 'الكود: ${row['code']} · المتاح: ${row['quantity']} حزمة'
+                          ? 'الكود: ${row['code']} · المتاح: ${row['quantity']} حزمة و ${row['loose_pieces'] ?? 0} قطعة'
                           : '${row['phone'] ?? 'لا يوجد هاتف'}${'${row['address'] ?? ''}'.isEmpty ? '' : ' · ${row['address']}'}';
                       return Material(
                         color: Colors.white,
@@ -353,6 +353,7 @@ class _QuickProductDialogState extends State<QuickProductDialog> {
   late final _title = TextEditingController(text: widget.initialTitle);
   final _code = TextEditingController();
   final _quantity = TextEditingController(text: '0');
+  final _loosePieces = TextEditingController(text: '0');
   final _pieces = TextEditingController(text: '1');
   bool _busy = false;
   String? _error;
@@ -362,6 +363,7 @@ class _QuickProductDialogState extends State<QuickProductDialog> {
     _title.dispose();
     _code.dispose();
     _quantity.dispose();
+    _loosePieces.dispose();
     _pieces.dispose();
     super.dispose();
   }
@@ -378,6 +380,7 @@ class _QuickProductDialogState extends State<QuickProductDialog> {
             'title': _title.text.trim(),
             'code': _code.text.trim(),
             'quantity': int.parse(_quantity.text),
+            'loose_pieces': int.parse(_loosePieces.text),
             'pieces_per_unit': int.parse(_pieces.text),
           });
       if (mounted) Navigator.pop(context, created);
@@ -442,7 +445,9 @@ class _QuickProductDialogState extends State<QuickProductDialog> {
                         ),
                         validator: (v) {
                           final n = int.tryParse(v ?? '');
-                          return n == null || n < 0 ? 'أدخل كمية صحيحة.' : null;
+                          return n == null || n < 0 || n > 1000000000
+                              ? 'أدخل كمية صحيحة.'
+                              : null;
                         },
                       ),
                     ),
@@ -457,13 +462,32 @@ class _QuickProductDialogState extends State<QuickProductDialog> {
                         ),
                         validator: (v) {
                           final n = int.tryParse(v ?? '');
-                          return n == null || n < 1
+                          return n == null || n < 1 || n > 1000000
                               ? 'أدخل رقماً صحيحاً.'
                               : null;
                         },
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _loosePieces,
+                  enabled: !_busy,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'قطع إضافية خارج الحزم',
+                  ),
+                  validator: (v) {
+                    final loose = int.tryParse(v ?? '');
+                    final pieces = int.tryParse(_pieces.text);
+                    return loose == null ||
+                            pieces == null ||
+                            loose < 0 ||
+                            loose >= pieces
+                        ? 'أدخل عدداً أقل من القطع في الحزمة.'
+                        : null;
+                  },
                 ),
               ],
             ),
@@ -1061,7 +1085,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                                   enabled: !_busy,
                                   keyboardType: TextInputType.number,
                                   decoration: const InputDecoration(
-                                    labelText: 'العبوة (قطعة/كرتونة)',
+                                    labelText: 'قطع / وحدة (1 للبيع بالقطعة)',
                                   ),
                                   onChanged: (_) => setState(() {}),
                                   validator: (v) {
@@ -1081,7 +1105,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                                   enabled: !_busy,
                                   keyboardType: TextInputType.number,
                                   decoration: const InputDecoration(
-                                    labelText: 'العدد (كرتونة)',
+                                    labelText: 'العدد (وحدات أو قطع)',
                                   ),
                                   onChanged: (_) => setState(() {}),
                                   validator: (v) {
@@ -1093,6 +1117,19 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                                         : null;
                                   },
                                 ),
+                              ),
+                              TextButton.icon(
+                                onPressed: _busy
+                                    ? null
+                                    : () => setState(() {
+                                        line.unitsPerPackage.text = '1';
+                                        line.packageCount.text = '1';
+                                      }),
+                                icon: const Icon(
+                                  Icons.inventory_2_outlined,
+                                  size: 18,
+                                ),
+                                label: const Text('بالقطعة'),
                               ),
                               SizedBox(
                                 width: 180,

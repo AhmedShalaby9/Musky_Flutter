@@ -415,7 +415,7 @@ class _CommerceScreenState extends State<CommerceScreen> {
               _invoiceField('الكود', '${row['code']}'),
               _invoiceField(
                 'المخزون',
-                '${row['quantity']} حزمة',
+                '${row['quantity']} حزمة و ${row['loose_pieces'] ?? 0} قطعة',
                 emphasis: true,
               ),
               _invoiceField('القطع / الحزمة', '${row['pieces_per_unit']}'),
@@ -771,7 +771,7 @@ class _CommerceScreenState extends State<CommerceScreen> {
               runSpacing: 10,
               children: [
                 _productSummary(
-                  'إجمالي الحزم',
+                  'إجمالي الحزم الكاملة',
                   rows.fold<int>(
                     0,
                     (total, row) => total + (row['quantity'] as int),
@@ -858,7 +858,7 @@ class _CommerceScreenState extends State<CommerceScreen> {
                                             ? [
                                                 'المنتج',
                                                 'الكود',
-                                                'الحزم',
+                                                'الحزم + القطع',
                                                 'القطع / الحزمة',
                                                 'الحالة',
                                                 'الإجراءات',
@@ -894,7 +894,9 @@ class _CommerceScreenState extends State<CommerceScreen> {
                                                     Text('${row['code']}'),
                                                   ),
                                                   DataCell(
-                                                    Text('${row['quantity']}'),
+                                                    Text(
+                                                      '${row['quantity']} حزمة + ${row['loose_pieces'] ?? 0} قطعة',
+                                                    ),
                                                   ),
                                                   DataCell(
                                                     Text(
@@ -1094,6 +1096,9 @@ class _ProductDialogState extends State<ProductDialog> {
   late final _quantity = TextEditingController(
     text: '${widget.product?['quantity'] ?? 0}',
   );
+  late final _loosePieces = TextEditingController(
+    text: '${widget.product?['loose_pieces'] ?? 0}',
+  );
   late final _pieces = TextEditingController(
     text: '${widget.product?['pieces_per_unit'] ?? 1}',
   );
@@ -1101,7 +1106,7 @@ class _ProductDialogState extends State<ProductDialog> {
   String? _error;
   @override
   void dispose() {
-    for (final c in [_title, _code, _quantity, _pieces]) {
+    for (final c in [_title, _code, _quantity, _loosePieces, _pieces]) {
       c.dispose();
     }
     super.dispose();
@@ -1109,6 +1114,12 @@ class _ProductDialogState extends State<ProductDialog> {
 
   Future<void> _save() async {
     if (_busy || !_form.currentState!.validate()) {
+      return;
+    }
+    if (int.parse(_loosePieces.text) >= int.parse(_pieces.text)) {
+      setState(
+        () => _error = 'القطع الإضافية يجب أن تكون أقل من عدد القطع في الحزمة.',
+      );
       return;
     }
     setState(() {
@@ -1124,6 +1135,7 @@ class _ProductDialogState extends State<ProductDialog> {
           'title': _title.text.trim(),
           'code': _code.text.trim(),
           'quantity': int.parse(_quantity.text),
+          'loose_pieces': int.parse(_loosePieces.text),
           'pieces_per_unit': int.parse(_pieces.text),
           if (id != null) 'version': widget.product!['version'],
         },
@@ -1195,6 +1207,7 @@ class _ProductDialogState extends State<ProductDialog> {
                 const SizedBox(height: 16),
                 for (final entry in [
                   (_quantity, 'الكمية (حزم)', 0, 1000000000),
+                  (_loosePieces, 'قطع إضافية أقل من الحزمة', 0, 1000000),
                   (_pieces, 'القطع في الحزمة', 1, 1000000),
                 ]) ...[
                   TextFormField(
