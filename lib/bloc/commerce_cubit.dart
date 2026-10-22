@@ -13,6 +13,7 @@ class CommerceState {
     this.documentTypeFilter = '',
     this.fromDate = '',
     this.toDate = '',
+    this.inStockOnly = false,
     this.expired = false,
   });
 
@@ -30,6 +31,8 @@ class CommerceState {
   // before these filters were introduced. New states always initialize them.
   final String? fromDate;
   final String? toDate;
+  // Products only: hide products whose stock quantity is zero.
+  final bool inStockOnly;
   final bool expired;
 
   CommerceState copyWith({
@@ -43,6 +46,7 @@ class CommerceState {
     String? documentTypeFilter,
     String? fromDate,
     String? toDate,
+    bool? inStockOnly,
     bool? expired,
   }) => CommerceState(
     products: products,
@@ -55,6 +59,7 @@ class CommerceState {
     documentTypeFilter: documentTypeFilter ?? this.documentTypeFilter ?? '',
     fromDate: fromDate ?? this.fromDate ?? '',
     toDate: toDate ?? this.toDate ?? '',
+    inStockOnly: inStockOnly ?? this.inStockOnly,
     expired: expired ?? this.expired,
   );
 }
@@ -116,6 +121,16 @@ class CommerceCubit extends Cubit<CommerceState> {
     to: to,
   );
 
+  void filterInStock(bool inStockOnly) => _fetch(
+    offset: 0,
+    q: state.searchQuery,
+    status: state.statusFilter,
+    documentType: state.documentTypeFilter ?? '',
+    from: state.fromDate ?? '',
+    to: state.toDate ?? '',
+    inStockOnly: inStockOnly,
+  );
+
   void nextPage() => _fetch(
     offset: state.offset + 50,
     q: state.searchQuery,
@@ -144,7 +159,9 @@ class CommerceCubit extends Cubit<CommerceState> {
     required String documentType,
     required String from,
     required String to,
+    bool? inStockOnly,
   }) async {
+    inStockOnly ??= state.inStockOnly;
     _active?.cancel();
     final cancel = ApiRequestCancellation();
     _active = cancel;
@@ -157,6 +174,7 @@ class CommerceCubit extends Cubit<CommerceState> {
           'limit': '50',
           'offset': '$offset',
           if (q.isNotEmpty) 'q': q,
+          if (state.products && inStockOnly) 'in_stock': 'true',
           if (!state.products && status.isNotEmpty) 'status': status,
           if (!state.products && documentType.isNotEmpty)
             'document_type': documentType,
@@ -180,6 +198,7 @@ class CommerceCubit extends Cubit<CommerceState> {
             documentTypeFilter: documentType,
             fromDate: from,
             toDate: to,
+            inStockOnly: inStockOnly,
           ),
         );
       }

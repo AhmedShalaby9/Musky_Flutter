@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/api.dart';
+import '../core/saved_login.dart';
 import '../core/theme.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -8,10 +9,12 @@ class LoginScreen extends StatefulWidget {
     required this.api,
     required this.onLogin,
     this.notice,
+    this.savedLogin = const SecureSavedLogin(),
   });
   final MuskyApi api;
   final ValueChanged<AppUser> onLogin;
   final String? notice;
+  final SavedLogin savedLogin;
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
@@ -20,8 +23,25 @@ class _LoginScreenState extends State<LoginScreen> {
   final _form = GlobalKey<FormState>();
   final _email = TextEditingController();
   final _password = TextEditingController();
-  bool _busy = false, _obscure = true;
+  bool _busy = false, _obscure = true, _remember = true;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSaved();
+  }
+
+  Future<void> _loadSaved() async {
+    final saved = await widget.savedLogin.read();
+    if (saved == null || !mounted) return;
+    // Don't overwrite anything the user has already started typing.
+    if (_email.text.isEmpty && _password.text.isEmpty) {
+      _email.text = saved.email;
+      _password.text = saved.password;
+    }
+  }
+
   @override
   void dispose() {
     _email.dispose();
@@ -39,6 +59,11 @@ class _LoginScreenState extends State<LoginScreen> {
     });
     try {
       final user = await widget.api.login(_email.text, _password.text);
+      if (_remember) {
+        await widget.savedLogin.write(_email.text.trim(), _password.text);
+      } else {
+        await widget.savedLogin.clear();
+      }
       if (mounted) {
         _password.clear();
         widget.onLogin(user);
@@ -47,7 +72,11 @@ class _LoginScreenState extends State<LoginScreen> {
       print('[LOGIN] ApiException status=${e.status} message=${e.message}');
       print('[LOGIN] stack: $st');
       if (mounted) {
-        setState(() => _error = e.status != null ? '${e.message} [${e.status}]' : e.message);
+        setState(
+          () => _error = e.status != null
+              ? '${e.message} [${e.status}]'
+              : e.message,
+        );
       }
     } catch (e, st) {
       print('[LOGIN] unexpected error: $e');
@@ -144,7 +173,18 @@ class _LoginScreenState extends State<LoginScreen> {
                           ? 'أدخل كلمة المرور.'
                           : null,
                     ),
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 8),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      dense: true,
+                      value: _remember,
+                      onChanged: _busy
+                          ? null
+                          : (v) => setState(() => _remember = v ?? true),
+                      title: const Text('تذكّر بيانات الدخول'),
+                    ),
+                    const SizedBox(height: 20),
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton(

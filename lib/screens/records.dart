@@ -36,6 +36,10 @@ class RecordsScreen extends StatefulWidget {
 class _RecordsScreenState extends State<RecordsScreen> {
   final _search = TextEditingController();
   final _horizontal = ScrollController();
+  final _vertical = ScrollController();
+  // Vertical offset to restore once the list has reloaded after returning
+  // from a client's details page (the reload swaps the table for a spinner).
+  double? _restoreOffset;
   Timer? _searchTimer;
   bool get _clients => widget.section == 'العملاء';
   bool get _businesses => widget.section == 'الأعمال';
@@ -52,6 +56,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
     _searchTimer?.cancel();
     _search.dispose();
     _horizontal.dispose();
+    _vertical.dispose();
     super.dispose();
   }
 
@@ -225,6 +230,50 @@ class _RecordsScreenState extends State<RecordsScreen> {
     }
   }
 
+  Future<void> _exportUnpaid() async {
+    final days = await showDialog<List<int>>(
+      context: context,
+      builder: (_) => const UnpaidPeriodsDialog(),
+    );
+    if (days == null || days.isEmpty || !mounted) return;
+    try {
+      final bytes = await widget.api.unpaidClientsXlsx(widget.tenantId!, days);
+      // .xlsx files are zip archives and start with "PK".
+      if (bytes.length < 2 || bytes[0] != 0x50 || bytes[1] != 0x4b) {
+        throw const ApiException('الملف المستلم ليس ملف Excel صحيحاً.');
+      }
+      final location = await getSaveLocation(
+        suggestedName: 'العملاء_غير_المسددين.xlsx',
+        acceptedTypeGroups: [
+          const XTypeGroup(label: 'Excel', extensions: ['xlsx']),
+        ],
+      );
+      if (location == null || !mounted) return;
+      await File(location.path).writeAsBytes(bytes, flush: true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('تم حفظ الملف: ${location.path}'),
+          backgroundColor: teal,
+        ),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      if (e.status == 401) {
+        widget.onExpired();
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('تعذّر إنشاء الملف: $e')));
+    }
+  }
+
   Future<void> _addAdmin() async {
     final data = await showDialog<Map<String, String>>(
       context: context,
@@ -255,8 +304,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
         tenantId: widget.tenantId!,
         userId: user['id'] as int,
         userName: '${user['name']}',
-        canManage:
-            widget.user.isSuperAdmin || widget.user.id == user['id'],
+        canManage: widget.user.isSuperAdmin || widget.user.id == user['id'],
         canControlVisibility: widget.user.isSuperAdmin,
         onExpired: widget.onExpired,
       ),
@@ -290,8 +338,19 @@ class _RecordsScreenState extends State<RecordsScreen> {
   Widget build(BuildContext context) {
     return BlocConsumer<RecordsCubit, RecordsState>(
       bloc: widget.cubit,
+      listenWhen: (previous, current) =>
+          current.expired || (previous.loading && !current.loading),
       listener: (context, state) {
         if (state.expired) widget.onExpired();
+        final offset = _restoreOffset;
+        if (offset == null || state.loading) return;
+        _restoreOffset = null;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || !_vertical.hasClients) return;
+          _vertical.jumpTo(
+            offset.clamp(0.0, _vertical.position.maxScrollExtent),
+          );
+        });
       },
       builder: (context, state) {
         final rows = state.rows;
@@ -321,6 +380,14 @@ class _RecordsScreenState extends State<RecordsScreen> {
                     ],
                   ),
                 ),
+                if (_clients) ...[
+                  OutlinedButton.icon(
+                    onPressed: loading ? null : _exportUnpaid,
+                    icon: const Icon(Icons.table_view_outlined, size: 19),
+                    label: const Text('تصدير غير المسددين'),
+                  ),
+                  const SizedBox(width: 12),
+                ],
                 if (_clients)
                   FilledButton.icon(
                     onPressed: loading ? null : () => _edit(),
@@ -464,6 +531,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                 minWidth: size.maxWidth,
                               ),
                               child: SingleChildScrollView(
+                                controller: _vertical,
                                 child: DataTable(
                                   headingRowColor: WidgetStateProperty.all(
                                     const Color(0xFFF8FAF6),
@@ -513,6 +581,11 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                                                   .centerStart,
                                                         ),
                                                         onPressed: () async {
+                                                          final offset =
+                                                              _vertical
+                                                                  .hasClients
+                                                              ? _vertical.offset
+                                                              : 0.0;
                                                           await Navigator.push(
                                                             context,
                                                             MaterialPageRoute(
@@ -531,6 +604,8 @@ class _RecordsScreenState extends State<RecordsScreen> {
                                                             ),
                                                           );
                                                           if (mounted) {
+                                                            _restoreOffset =
+                                                                offset;
                                                             widget.cubit
                                                                 .refresh();
                                                           }
@@ -978,6 +1053,67 @@ class _TraderPasswordDialogState extends State<TraderPasswordDialog> {
             Navigator.pop(context, _password.text);
         },
         child: const Text('حفظ'),
+      ),
+    ],
+  );
+}
+
+class UnpaidPeriodsDialog extends StatefulWidget {
+  const UnpaidPeriodsDialog({super.key});
+
+  static const options = [1, 2, 3, 5, 7, 10, 14, 21, 30, 60, 90];
+
+  @override
+  State<UnpaidPeriodsDialog> createState() => _UnpaidPeriodsDialogState();
+}
+
+class _UnpaidPeriodsDialogState extends State<UnpaidPeriodsDialog> {
+  final _selected = <int>{};
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('العملاء غير المسددين'),
+    content: SizedBox(
+      width: 420,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('اختر فترة واحدة أو أكثر (بالأيام منذ آخر دفعة):'),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final d in UnpaidPeriodsDialog.options)
+                FilterChip(
+                  label: Text('${d}d'),
+                  selected: _selected.contains(d),
+                  onSelected: (on) => setState(
+                    () => on ? _selected.add(d) : _selected.remove(d),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'سيتم تضمين العملاء المدينين الذين لم يدفعوا منذ أصغر فترة محددة، مع عمود يوضح الفترة.',
+            style: TextStyle(color: muted, fontSize: 12),
+          ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('إلغاء'),
+      ),
+      FilledButton.icon(
+        onPressed: _selected.isEmpty
+            ? null
+            : () => Navigator.pop(context, _selected.toList()..sort()),
+        icon: const Icon(Icons.table_view_outlined, size: 18),
+        label: const Text('إنشاء الملف'),
       ),
     ],
   );

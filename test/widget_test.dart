@@ -319,6 +319,10 @@ class FakeApi implements MuskyApi {
   ) async => Uint8List.fromList([0x25, 0x50, 0x44, 0x46, 0x2d]);
 
   @override
+  Future<Uint8List> unpaidClientsXlsx(int tenantId, List<int> days) async =>
+      Uint8List.fromList([0x50, 0x4b, 0x03, 0x04]);
+
+  @override
   Future<void> saveClient(
     int tenantId,
     Map<String, dynamic> data, {
