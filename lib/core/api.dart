@@ -146,7 +146,7 @@ class HttpMuskyApi implements MuskyApi {
   HttpMuskyApi({
     String address = const String.fromEnvironment(
       'MUSKY_API_URL',
-      defaultValue: 'https://169.58.36.30/api/v1',
+      defaultValue: 'https://musky.bylogi.com/api/v1',
     ),
   }) : _base = Uri.parse(address) {
     if (!_base.hasAuthority ||
