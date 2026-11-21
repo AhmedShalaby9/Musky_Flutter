@@ -6,6 +6,8 @@ import '../bloc/commerce_cubit.dart';
 import '../bloc/overview_cubit.dart';
 import '../bloc/journal_cubit.dart';
 import '../bloc/china_cubit.dart';
+import '../bloc/expenses_cubit.dart';
+import '../bloc/reports_cubit.dart';
 import '../core/api.dart';
 import '../core/theme.dart';
 import 'records.dart';
@@ -13,6 +15,8 @@ import 'commerce.dart';
 import 'financial_overview.dart';
 import 'daily_journal.dart';
 import 'china_balance.dart';
+import 'expenses.dart';
+import 'reports.dart';
 
 class Workspace extends StatefulWidget {
   const Workspace({
@@ -43,6 +47,8 @@ class _WorkspaceState extends State<Workspace> {
   OverviewCubit? _overviewCubit;
   JournalCubit? _journalCubit;
   ChinaCubit? _chinaCubit;
+  ExpensesCubit? _expensesCubit;
+  ReportsCubit? _reportsCubit;
 
   void _initTenantCubits(int tenantId) {
     _clientsCubit?.close();
@@ -52,6 +58,8 @@ class _WorkspaceState extends State<Workspace> {
     _overviewCubit?.close();
     _journalCubit?.close();
     _chinaCubit?.close();
+    _expensesCubit?.close();
+    _reportsCubit?.close();
     _clientsCubit = RecordsCubit(widget.api, 'العملاء', tenantId);
     _teamCubit = RecordsCubit(widget.api, 'الفريق', tenantId);
     _productsCubit = CommerceCubit(widget.api, tenantId, products: true);
@@ -59,6 +67,8 @@ class _WorkspaceState extends State<Workspace> {
     _overviewCubit = OverviewCubit(widget.api, tenantId);
     _journalCubit = JournalCubit(widget.api, tenantId);
     _chinaCubit = ChinaCubit(widget.api, tenantId);
+    _expensesCubit = ExpensesCubit(widget.api, tenantId);
+    _reportsCubit = ReportsCubit(widget.api, tenantId);
   }
 
   @override
@@ -80,6 +90,8 @@ class _WorkspaceState extends State<Workspace> {
     _overviewCubit?.close();
     _journalCubit?.close();
     _chinaCubit?.close();
+    _expensesCubit?.close();
+    _reportsCubit?.close();
     super.dispose();
   }
 
@@ -262,6 +274,16 @@ class _WorkspaceState extends State<Workspace> {
                             Icons.currency_yuan_outlined,
                             enabled: _tenantId != null,
                           ),
+                          nav(
+                            'المصروفات',
+                            Icons.account_balance_wallet_outlined,
+                            enabled: _tenantId != null,
+                          ),
+                          nav(
+                            'التقارير',
+                            Icons.bar_chart_outlined,
+                            enabled: _tenantId != null,
+                          ),
                           nav('الحساب', Icons.person_outline),
                         ],
                       ),
@@ -394,6 +416,16 @@ class _WorkspaceState extends State<Workspace> {
                         'رصيد الصين' => ChinaBalanceScreen(
                           key: ValueKey('china:$_tenantId'),
                           cubit: _chinaCubit!,
+                          onExpired: _expired,
+                        ),
+                        'المصروفات' => ExpensesScreen(
+                          key: ValueKey('expenses:$_tenantId'),
+                          cubit: _expensesCubit!,
+                          onExpired: _expired,
+                        ),
+                        'التقارير' => ReportsScreen(
+                          key: ValueKey('reports:$_tenantId'),
+                          cubit: _reportsCubit!,
                           onExpired: _expired,
                         ),
                         'العملاء' || 'الفريق' || 'الأعمال' => RecordsScreen(
