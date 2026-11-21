@@ -1121,11 +1121,16 @@ class _ProductDialogState extends State<ProductDialog> {
   late final _pieces = TextEditingController(
     text: '${widget.product?['pieces_per_unit'] ?? 1}',
   );
+  late final _cost = TextEditingController(
+    text: widget.product != null && (widget.product!['cost_minor'] as num? ?? 0) > 0
+        ? moneyInput((widget.product!['cost_minor'] as num).toInt())
+        : '',
+  );
   bool _busy = false;
   String? _error;
   @override
   void dispose() {
-    for (final c in [_title, _code, _quantity, _loosePieces, _pieces]) {
+    for (final c in [_title, _code, _quantity, _loosePieces, _pieces, _cost]) {
       c.dispose();
     }
     super.dispose();
@@ -1156,6 +1161,7 @@ class _ProductDialogState extends State<ProductDialog> {
           'quantity': int.parse(_quantity.text),
           'loose_pieces': int.parse(_loosePieces.text),
           'pieces_per_unit': int.parse(_pieces.text),
+          'cost_minor': parseMoney(_cost.text.trim()) ?? 0,
           if (id != null) 'version': widget.product!['version'],
         },
       );
@@ -1243,6 +1249,21 @@ class _ProductDialogState extends State<ProductDialog> {
                   ),
                   const SizedBox(height: 16),
                 ],
+                TextFormField(
+                  controller: _cost,
+                  enabled: !_busy,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'سعر التكلفة (اختياري)',
+                    hintText: '0.00',
+                  ),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return null;
+                    final n = parseMoney(v);
+                    return n == null || n < 0 ? 'أدخل مبلغاً صحيحاً.' : null;
+                  },
+                ),
+                const SizedBox(height: 16),
                 const Text(
                   'تغيير الكمية يُسجّل حركة مخزون.',
                   style: TextStyle(color: muted, fontSize: 12),

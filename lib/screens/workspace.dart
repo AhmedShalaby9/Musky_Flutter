@@ -5,12 +5,14 @@ import '../bloc/records_cubit.dart';
 import '../bloc/commerce_cubit.dart';
 import '../bloc/overview_cubit.dart';
 import '../bloc/journal_cubit.dart';
+import '../bloc/china_cubit.dart';
 import '../core/api.dart';
 import '../core/theme.dart';
 import 'records.dart';
 import 'commerce.dart';
 import 'financial_overview.dart';
 import 'daily_journal.dart';
+import 'china_balance.dart';
 
 class Workspace extends StatefulWidget {
   const Workspace({
@@ -40,6 +42,7 @@ class _WorkspaceState extends State<Workspace> {
   CommerceCubit? _invoicesCubit;
   OverviewCubit? _overviewCubit;
   JournalCubit? _journalCubit;
+  ChinaCubit? _chinaCubit;
 
   void _initTenantCubits(int tenantId) {
     _clientsCubit?.close();
@@ -48,12 +51,14 @@ class _WorkspaceState extends State<Workspace> {
     _invoicesCubit?.close();
     _overviewCubit?.close();
     _journalCubit?.close();
+    _chinaCubit?.close();
     _clientsCubit = RecordsCubit(widget.api, 'العملاء', tenantId);
     _teamCubit = RecordsCubit(widget.api, 'الفريق', tenantId);
     _productsCubit = CommerceCubit(widget.api, tenantId, products: true);
     _invoicesCubit = CommerceCubit(widget.api, tenantId, products: false);
     _overviewCubit = OverviewCubit(widget.api, tenantId);
     _journalCubit = JournalCubit(widget.api, tenantId);
+    _chinaCubit = ChinaCubit(widget.api, tenantId);
   }
 
   @override
@@ -74,6 +79,7 @@ class _WorkspaceState extends State<Workspace> {
     _invoicesCubit?.close();
     _overviewCubit?.close();
     _journalCubit?.close();
+    _chinaCubit?.close();
     super.dispose();
   }
 
@@ -251,6 +257,11 @@ class _WorkspaceState extends State<Workspace> {
                             Icons.badge_outlined,
                             enabled: _tenantId != null,
                           ),
+                          nav(
+                            'رصيد الصين',
+                            Icons.currency_yuan_outlined,
+                            enabled: _tenantId != null,
+                          ),
                           nav('الحساب', Icons.person_outline),
                         ],
                       ),
@@ -378,6 +389,11 @@ class _WorkspaceState extends State<Workspace> {
                           cubit: _journalCubit!,
                           api: widget.api,
                           tenantId: _tenantId!,
+                          onExpired: _expired,
+                        ),
+                        'رصيد الصين' => ChinaBalanceScreen(
+                          key: ValueKey('china:$_tenantId'),
+                          cubit: _chinaCubit!,
                           onExpired: _expired,
                         ),
                         'العملاء' || 'الفريق' || 'الأعمال' => RecordsScreen(

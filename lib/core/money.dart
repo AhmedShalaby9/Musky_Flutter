@@ -25,6 +25,15 @@ String egp(int minor) {
   return '${minor < 0 ? '-' : ''}EGP $whole.${(amount % 100).toString().padLeft(2, '0')}';
 }
 
+String cny(int minor) {
+  final amount = minor.abs();
+  final whole = (amount ~/ 100).toString().replaceAllMapped(
+    RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
+    (m) => '${m[1]},',
+  );
+  return '${minor < 0 ? '-' : ''}¥ $whole.${(amount % 100).toString().padLeft(2, '0')}';
+}
+
 String invoiceTypeLabel(dynamic type) => type == 'purchase' ? 'شراء' : 'بيع';
 
 String invoiceStatusLabel(String status) => switch (status) {

@@ -355,6 +355,7 @@ class _QuickProductDialogState extends State<QuickProductDialog> {
   final _quantity = TextEditingController(text: '0');
   final _loosePieces = TextEditingController(text: '0');
   final _pieces = TextEditingController(text: '1');
+  final _cost = TextEditingController();
   bool _busy = false;
   String? _error;
 
@@ -365,6 +366,7 @@ class _QuickProductDialogState extends State<QuickProductDialog> {
     _quantity.dispose();
     _loosePieces.dispose();
     _pieces.dispose();
+    _cost.dispose();
     super.dispose();
   }
 
@@ -382,6 +384,7 @@ class _QuickProductDialogState extends State<QuickProductDialog> {
             'quantity': int.parse(_quantity.text),
             'loose_pieces': int.parse(_loosePieces.text),
             'pieces_per_unit': int.parse(_pieces.text),
+            'cost_minor': parseMoney(_cost.text.trim()) ?? 0,
           });
       if (mounted) Navigator.pop(context, created);
     } on ApiException catch (e) {
@@ -469,6 +472,21 @@ class _QuickProductDialogState extends State<QuickProductDialog> {
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _cost,
+                  enabled: !_busy,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'سعر التكلفة (اختياري)',
+                    hintText: '0.00',
+                  ),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return null;
+                    final n = parseMoney(v);
+                    return n == null || n < 0 ? 'أدخل مبلغاً صحيحاً.' : null;
+                  },
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
@@ -672,12 +690,13 @@ class _QuickClientDialogState extends State<QuickClientDialog> {
 }
 
 class _Line {
-  _Line(this.productId, this.title, int units, int cartons, int minor)
+  _Line(this.productId, this.title, int units, int cartons, int minor, {this.costMinor = 0})
     : unitsPerPackage = TextEditingController(text: '$units'),
       packageCount = TextEditingController(text: '$cartons'),
       price = TextEditingController(text: moneyInput(minor));
   final int productId;
   final String title;
+  final int costMinor;
   final TextEditingController unitsPerPackage, packageCount, price;
   int get total {
     final units = int.tryParse(unitsPerPackage.text) ?? 0;
@@ -751,6 +770,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
             item['units_per_package'] as int? ?? item['pieces_per_unit'] as int,
             item['package_count'] as int? ?? item['quantity'] as int,
             item['unit_price_minor'] as int,
+            costMinor: (item['cost_minor'] as num?)?.toInt() ?? 0,
           ),
         );
       }
@@ -804,6 +824,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
               row['pieces_per_unit'] as int,
               1,
               0,
+              costMinor: (row['cost_minor'] as num?)?.toInt() ?? 0,
             ),
           );
         } else {
@@ -1167,6 +1188,40 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                                 ),
                               ),
                             ],
+                          ),
+                          if (line.costMinor > 0) Builder(
+                            builder: (context) {
+                              final unitPrice = parseMoney(line.price.text) ?? 0;
+                              if (unitPrice > 0 && unitPrice < line.costMinor) {
+                                final lossPerUnit = line.costMinor - unitPrice;
+                                final units = int.tryParse(line.unitsPerPackage.text) ?? 0;
+                                final count = int.tryParse(line.packageCount.text) ?? 0;
+                                final totalLoss = lossPerUnit * units * count;
+                                return Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFFF3E0),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.warning_amber_rounded, size: 18, color: Color(0xFFE65100)),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            'سعر البيع أقل من التكلفة (${egp(line.costMinor)}) — ستخسر ${egp(totalLoss)}',
+                                            style: const TextStyle(color: Color(0xFFE65100), fontSize: 13),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              }
+                              return const SizedBox.shrink();
+                            },
                           ),
                         ],
                       ),
